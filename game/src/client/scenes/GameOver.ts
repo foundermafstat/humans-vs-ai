@@ -21,7 +21,7 @@ export class GameOver extends Scene {
     // "Game Over" text – created once and scaled responsively
     this.gameover_text = this.add
       .text(0, 0, 'Game Over', {
-        fontFamily: 'Arial Black',
+        fontFamily: 'VT323',
         fontSize: '64px',
         color: '#ffffff',
         stroke: '#000000',

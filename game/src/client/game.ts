@@ -27,6 +27,13 @@ const StartGame = (parent: string) => {
   return new Game({ ...config, parent });
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await document.fonts.load('16px "VT323"');
+    await document.fonts.ready;
+  } catch {
+    // Start with the CSS fallback if the Google Fonts request is unavailable.
+  }
+
   StartGame('game-container');
 });

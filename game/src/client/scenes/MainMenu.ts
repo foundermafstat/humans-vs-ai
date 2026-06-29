@@ -60,7 +60,7 @@ export class MainMenu extends Scene {
     if (!this.title) {
       this.title = this.add
         .text(0, 0, 'Main Menu', {
-          fontFamily: 'Arial Black',
+          fontFamily: 'VT323',
           fontSize: `${baseFontSize}px`,
           color: '#ffffff',
           stroke: '#000000',

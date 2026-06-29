@@ -31,7 +31,7 @@ export class Game extends Scene {
     // Display the current count
     this.countText = this.add
       .text(512, 340, `Count: ${this.count}`, {
-        fontFamily: 'Arial Black',
+        fontFamily: 'VT323',
         fontSize: 56,
         color: '#ffd700',
         stroke: '#000000',
@@ -57,7 +57,7 @@ export class Game extends Scene {
     const createButton = (y: number, label: string, color: string, onClick: () => void) => {
       const button = this.add
         .text(512, y, label, {
-          fontFamily: 'Arial Black',
+          fontFamily: 'VT323',
           fontSize: 36,
           color: color,
           backgroundColor: '#444444',

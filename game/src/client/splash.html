@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
     <link rel="stylesheet" type="text/css" href="splash.css" />
     <meta charset="UTF-8" />
     <meta
@@ -10,23 +13,15 @@
     <title>devvit</title>
   </head>
   <body class="app">
-    <img class="snoo" src="/snoo.png" alt="Snoo" />
-    <div class="content">
+    <div class="battlefield-scene" id="battlefield-scene"></div>
+    <section class="game-title" aria-label="Game title">
+      <span class="game-title__line">The first truly epic war</span>
+      <span class="game-title__line game-title__line--accent">of humanity against AI</span>
+    </section>
+    <main class="content">
       <h1 class="title" id="title"></h1>
-      <p class="description">
-        Edit <span class="code">src/client/splash.ts</span> to get started.
-      </p>
-    </div>
-    <div>
       <button class="start-button" id="start-button">Start</button>
-    </div>
-    <footer class="footer">
-      <div class="docs-link" tabindex="0" id="docs-link">Docs</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="playtest-link">r/Devvit</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="discord-link">Discord</div>
-    </footer>
+    </main>
     <script type="module" src="splash.ts" defer></script>
   </body>
 </html>
