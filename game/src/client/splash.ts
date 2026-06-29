@@ -85,6 +85,7 @@ const ARMS_OFFSETS: Record<ArmySource, { x: number; y: number }> = {
 const MUZZLE_X = 80;
 const MUZZLE_Y = 16;
 const ARMS_ATTACHMENT_INSET = 4;
+const AI_BODY_SCALE = 1.1;
 const SOLDIER_VISUAL_SCALE = 0.2;
 const SOLDIER_HP = 6;
 const SHOT_COOLDOWN = { min: 260, max: 520 };
@@ -241,6 +242,7 @@ class SplashBattleScene extends Scene {
     const body = this.add
       .image(bodyOffset.x, bodyOffset.y, assetKey(config.source, 'body', variant))
       .setOrigin(0.5, 0.5);
+    body.setScale(config.source === 'ai' ? AI_BODY_SCALE : 1);
     const arms = this.add.image(armsOffset.x, armsOffset.y, assetKey(config.source, 'arms', variant));
     arms.setOrigin(ARMS_ATTACHMENT_INSET / arms.width, ARMS_ATTACHMENT_INSET / arms.height);
     const container = this.add.container(spawn.x, spawn.y, [body, arms]).setDepth(spawn.y);
