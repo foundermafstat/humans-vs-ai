@@ -1,9 +1,18 @@
-import { context, requestExpandedMode } from '@devvit/web/client';
+import { canRunAsUser, context, navigateTo, requestExpandedMode, showToast } from '@devvit/web/client';
 import * as Phaser from 'phaser';
 import { AUTO, Game as PhaserGame, Scene } from 'phaser';
+import type { DevActionResponse, DevStateResponse, DevThreadTarget } from '../shared/api';
+import { DEV_USER_COMMENT_TEXT } from '../shared/api';
 
 const startButton = document.getElementById('start-button') as HTMLButtonElement;
 const titleElement = document.getElementById('title') as HTMLHeadingElement;
+const applyFlairButton = document.getElementById('apply-flair-button') as HTMLButtonElement;
+const createWarPostButton = document.getElementById('create-war-post-button') as HTMLButtonElement;
+const devThreadActions = document.getElementById('dev-thread-actions') as HTMLDivElement;
+const devStatus = document.getElementById('dev-status') as HTMLParagraphElement;
+const devFlair = document.getElementById('dev-flair') as HTMLParagraphElement;
+const devPassport = document.getElementById('dev-passport') as HTMLPreElement;
+const devUserCommentPreview = document.getElementById('dev-user-comment-preview') as HTMLParagraphElement;
 
 const ARMY_VARIANTS = [
   'man_african',
@@ -45,6 +54,11 @@ type ArmyConfig = {
   spawnEvery: number;
   firstDelay: number;
   bulletColor: number;
+};
+
+type DevErrorResponse = {
+  status: 'error';
+  message: string;
 };
 
 type BattleSoldier = {
@@ -736,9 +750,126 @@ function startBattlefield() {
   });
 }
 
+async function requestDevJson<T>(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+
+  if (!response.ok) {
+    const errorData: DevErrorResponse = await response
+      .json()
+      .catch(() => ({ status: 'error', message: 'Request failed' }));
+    throw new Error(errorData.message);
+  }
+
+  const data: T = await response.json();
+  return data;
+}
+
+function setDevLoading(isLoading: boolean) {
+  applyFlairButton.disabled = isLoading;
+  createWarPostButton.disabled = isLoading;
+
+  for (const button of devThreadActions.querySelectorAll('button')) {
+    button.disabled = isLoading;
+  }
+}
+
+function setDevStatus(message: string) {
+  devStatus.textContent = message;
+  if (message) showToast(message);
+}
+
+function renderDevProfile(response: DevStateResponse | DevActionResponse) {
+  devFlair.textContent = `Public Flair: ${response.publicFlair}`;
+  devPassport.textContent = response.passportLines.join('\n');
+  devThreadActions.hidden = !response.warRoom;
+}
+
+async function refreshDevState() {
+  const response = await requestDevJson<DevStateResponse>('/api/dev/state');
+  renderDevProfile(response);
+}
+
+async function runDevAction(action: () => Promise<DevActionResponse>) {
+  setDevLoading(true);
+  try {
+    const response = await action();
+    renderDevProfile(response);
+    setDevStatus(response.message);
+
+    if (response.navigateUrl) {
+      navigateTo(response.navigateUrl);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Dev action failed';
+    setDevStatus(message);
+  } finally {
+    setDevLoading(false);
+  }
+}
+
+function postJson(url: string, body?: object) {
+  const requestInit: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) requestInit.body = JSON.stringify(body);
+
+  return requestDevJson<DevActionResponse>(url, requestInit);
+}
+
+function getButtonTarget(button: HTMLButtonElement, attribute: string) {
+  const target = button.dataset[attribute];
+  if (target === 'ai' || target === 'green' || target === 'blue') return target;
+
+  return undefined;
+}
+
+async function postUserComment(event: MouseEvent, target: Exclude<DevThreadTarget, 'ai'>) {
+  const allowed = await canRunAsUser(event);
+  if (!allowed) {
+    setDevStatus('User comment permission was not granted.');
+    return;
+  }
+
+  await runDevAction(() => postJson('/api/dev/comment/user', { target }));
+}
+
 startButton.addEventListener('click', (event) => {
   requestExpandedMode(event, 'game');
 });
 
+applyFlairButton.addEventListener('click', () => {
+  void runDevAction(() => postJson('/api/dev/apply-flair'));
+});
+
+createWarPostButton.addEventListener('click', () => {
+  void runDevAction(() => postJson('/api/dev/create-war-post'));
+});
+
+for (const button of devThreadActions.querySelectorAll('button')) {
+  button.addEventListener('click', (event) => {
+    if (!(event instanceof MouseEvent) || !(button instanceof HTMLButtonElement)) return;
+
+    const appTarget = getButtonTarget(button, 'appCommentTarget');
+    if (appTarget) {
+      void runDevAction(() => postJson('/api/dev/comment/app', { target: appTarget }));
+      return;
+    }
+
+    const userTarget = getButtonTarget(button, 'userCommentTarget');
+    if (userTarget === 'green' || userTarget === 'blue') {
+      void postUserComment(event, userTarget);
+    }
+  });
+}
+
 titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
+devUserCommentPreview.textContent = `As-user comment previews: Green: "${DEV_USER_COMMENT_TEXT.green}" Blue: "${DEV_USER_COMMENT_TEXT.blue}"`;
+void refreshDevState().catch((error) => {
+  const message = error instanceof Error ? error.message : 'Failed to load dev state';
+  setDevStatus(message);
+});
 startBattlefield();
