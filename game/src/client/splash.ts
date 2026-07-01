@@ -24,7 +24,7 @@ type AiVariant = (typeof AI_VARIANTS)[number];
 type SoldierVariant = ArmyVariant | AiVariant;
 type ArmySource = 'blue' | 'green' | 'ai';
 type ArmyTeam = ArmySource;
-type SpawnEdge = 'bottom-left' | 'bottom-right' | 'top-center';
+type SpawnEdge = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right' | 'top-center';
 type SoldierState = 'march' | 'shoot' | 'dead';
 type FxGroup = keyof typeof FX_SPRITES;
 type FxOptions = {
@@ -41,7 +41,7 @@ type FxOptions = {
 type ArmyConfig = {
   team: ArmyTeam;
   source: ArmySource;
-  spawnEdge: SpawnEdge;
+  spawnEdges: readonly SpawnEdge[];
   maxAlive: number;
   spawnEvery: number;
   firstDelay: number;
@@ -67,6 +67,7 @@ type BattleSoldier = {
   armsBaseX: number;
   armsBaseY: number;
   lockedTarget?: BattleSoldier;
+  redirectToCenterUntil?: number;
   bulletColor: number;
 };
 
@@ -94,6 +95,8 @@ const ARMS_ATTACHMENT_INSET = 4;
 const AI_BODY_SCALE = 1.1;
 const SOLDIER_VISUAL_SCALE = 0.2;
 const SOLDIER_HP = 6;
+const SPAWN_GUARD_RANGE_MULTIPLIER = 2;
+const SPAWN_GUARD_REDIRECT_MS = 900;
 const SHOT_COOLDOWN = { min: 260, max: 520 };
 const GRENADE_COOLDOWN = { min: 12600, max: 21600 };
 const FX_SPRITES = {
@@ -115,8 +118,8 @@ const ARMY_CONFIGS: ArmyConfig[] = [
   {
     team: 'blue',
     source: 'blue',
-    spawnEdge: 'bottom-right',
-    maxAlive: 36,
+    spawnEdges: ['bottom-right'],
+    maxAlive: 144,
     spawnEvery: 317,
     firstDelay: 200,
     bulletColor: 0x65c7ff,
@@ -124,8 +127,8 @@ const ARMY_CONFIGS: ArmyConfig[] = [
   {
     team: 'green',
     source: 'green',
-    spawnEdge: 'bottom-left',
-    maxAlive: 36,
+    spawnEdges: ['bottom-left'],
+    maxAlive: 144,
     spawnEvery: 317,
     firstDelay: 450,
     bulletColor: 0x75d66b,
@@ -133,8 +136,8 @@ const ARMY_CONFIGS: ArmyConfig[] = [
   {
     team: 'ai',
     source: 'ai',
-    spawnEdge: 'top-center',
-    maxAlive: 480,
+    spawnEdges: ['top-center', 'top-left', 'top-right'],
+    maxAlive: 432,
     spawnEvery: 173,
     firstDelay: 800,
     bulletColor: 0xff4c4c,
@@ -162,9 +165,9 @@ function fxKey(name: string) {
   return `splash-fx-${name}`;
 }
 
-function pick(items: readonly string[]) {
+function pick<T>(items: readonly T[]) {
   const fallback = items[0];
-  if (!fallback) throw new Error('Empty FX group');
+  if (fallback === undefined) throw new Error('Empty collection');
 
   return items[Phaser.Math.Between(0, items.length - 1)] ?? fallback;
 }
@@ -245,7 +248,7 @@ class SplashBattleScene extends Scene {
     const variant = variants[Phaser.Math.Between(0, variants.length - 1)];
     if (!variant) return;
 
-    const spawn = this.getSpawnPoint(config.spawnEdge);
+    const spawn = this.getSpawnPoint(pick(config.spawnEdges));
     const bodyOffset = BODY_OFFSETS[config.source];
     const armsOffset = ARMS_OFFSETS[config.source];
     const size = Phaser.Math.FloatBetween(1.35, 1.7) * SOLDIER_VISUAL_SCALE;
@@ -268,7 +271,7 @@ class SplashBattleScene extends Scene {
       hp: SOLDIER_HP,
       size,
       speed: Phaser.Math.FloatBetween(34, 54),
-      range: Phaser.Math.FloatBetween(185, 235),
+      range: Phaser.Math.FloatBetween(123, 157),
       nextShotAt: this.time.now + Phaser.Math.Between(SHOT_COOLDOWN.min, SHOT_COOLDOWN.max),
       nextGrenadeAt: this.time.now + Phaser.Math.Between(GRENADE_COOLDOWN.min, GRENADE_COOLDOWN.max),
       facing: 1,
@@ -283,6 +286,17 @@ class SplashBattleScene extends Scene {
 
   private updateSoldier(soldier: BattleSoldier, time: number, dt: number) {
     soldier.age += dt;
+
+    if (soldier.redirectToCenterUntil && time < soldier.redirectToCenterUntil) {
+      soldier.state = 'march';
+      delete soldier.lockedTarget;
+      this.moveTowardMapCenter(soldier, dt);
+      this.holdWeaponLevel(soldier, dt);
+      this.playStep(soldier);
+      return;
+    }
+
+    delete soldier.redirectToCenterUntil;
 
     const target = this.getLockedTarget(soldier);
     if (!target) {
@@ -303,8 +317,16 @@ class SplashBattleScene extends Scene {
 
     if (distance > soldier.range) {
       soldier.state = 'march';
-      soldier.container.x += (dx / distance) * soldier.speed * dt;
-      soldier.container.y += (dy / distance) * soldier.speed * dt;
+      const nextX = soldier.container.x + (dx / distance) * soldier.speed * dt;
+      const nextY = soldier.container.y + (dy / distance) * soldier.speed * dt;
+      if (this.canEnterOpponentSpawnGuard(soldier, nextX, nextY)) {
+        soldier.container.x = nextX;
+        soldier.container.y = nextY;
+      } else {
+        delete soldier.lockedTarget;
+        soldier.redirectToCenterUntil = time + SPAWN_GUARD_REDIRECT_MS;
+        this.moveTowardMapCenter(soldier, dt);
+      }
       this.holdWeaponLevel(soldier, dt);
       this.playStep(soldier);
       return;
@@ -320,7 +342,7 @@ class SplashBattleScene extends Scene {
       this.shoot(soldier, target);
     }
 
-    if (soldier.team !== 'ai' && time >= soldier.nextGrenadeAt) {
+    if (time >= soldier.nextGrenadeAt) {
       soldier.nextGrenadeAt = time + Phaser.Math.Between(GRENADE_COOLDOWN.min, GRENADE_COOLDOWN.max);
       this.launchGrenade(soldier, target);
     }
@@ -721,10 +743,70 @@ class SplashBattleScene extends Scene {
       return { x: width + 50, y: height - Phaser.Math.Between(42, 128) };
     }
 
+    if (edge === 'top-left') {
+      return { x: Phaser.Math.Between(42, 128), y: -50 };
+    }
+
+    if (edge === 'top-right') {
+      return { x: width - Phaser.Math.Between(42, 128), y: -50 };
+    }
+
     return {
       x: width / 2 + Phaser.Math.Between(-120, 120),
       y: -50,
     };
+  }
+
+  private moveTowardMapCenter(soldier: BattleSoldier, dt: number) {
+    const dx = this.scale.width / 2 - soldier.container.x;
+    const dy = this.scale.height / 2 - soldier.container.y;
+    const distance = Math.max(Math.hypot(dx, dy), 1);
+
+    soldier.facing = dx >= 0 ? 1 : -1;
+    soldier.container.setScale(soldier.facing * soldier.size, soldier.size);
+    soldier.container.x += (dx / distance) * soldier.speed * dt;
+    soldier.container.y += (dy / distance) * soldier.speed * dt;
+    soldier.container.setDepth(soldier.container.y);
+  }
+
+  private getSpawnGuardPoint(edge: SpawnEdge) {
+    const width = this.scale.width;
+    const height = this.scale.height;
+
+    if (edge === 'bottom-left') {
+      return { x: -50, y: height - 85 };
+    }
+
+    if (edge === 'bottom-right') {
+      return { x: width + 50, y: height - 85 };
+    }
+
+    if (edge === 'top-left') {
+      return { x: 85, y: -50 };
+    }
+
+    if (edge === 'top-right') {
+      return { x: width - 85, y: -50 };
+    }
+
+    return { x: width / 2, y: -50 };
+  }
+
+  private canEnterOpponentSpawnGuard(soldier: BattleSoldier, x: number, y: number) {
+    const guardRadius = soldier.range * SPAWN_GUARD_RANGE_MULTIPLIER;
+
+    for (const config of ARMY_CONFIGS) {
+      if (config.team === soldier.team) continue;
+
+      for (const edge of config.spawnEdges) {
+        const guardPoint = this.getSpawnGuardPoint(edge);
+        if (Phaser.Math.Distance.Between(x, y, guardPoint.x, guardPoint.y) < guardRadius) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   private countAlive(team: ArmyTeam) {
