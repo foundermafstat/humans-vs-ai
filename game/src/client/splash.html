@@ -14,31 +14,20 @@
   </head>
   <body class="app">
     <div class="battlefield-scene" id="battlefield-scene"></div>
+    <img class="splash-awards" src="/assets/awards.webp" alt="" aria-hidden="true" draggable="false" />
     <section class="game-title" aria-label="Game title">
-      <span class="game-title__line" data-text="The first truly EPIC WAR">The first truly EPIC WAR</span>
-      <span class="game-title__line game-title__line--accent" data-text="of humanity against AI">of humanity against AI</span>
+      <img class="game-title__logo" id="game-logo" alt="The first truly epic war of humanity against AI" draggable="false" />
     </section>
     <main class="content">
       <h1 class="title" id="title"></h1>
       <button class="start-button" id="start-button">Start</button>
-      <section class="dev-panel" aria-label="Dev Reddit test panel">
-        <p class="dev-panel__flair" id="dev-flair"></p>
-        <pre class="dev-panel__passport" id="dev-passport"></pre>
-        <div class="dev-panel__buttons">
-          <button class="dev-button" id="apply-flair-button">Apply Green Flair</button>
-          <button class="dev-button" id="create-war-post-button">Create Dev War Post</button>
-        </div>
-        <div class="dev-panel__buttons dev-panel__threads" id="dev-thread-actions" hidden>
-          <button class="dev-button" data-app-comment-target="ai">Game: Post AI Response</button>
-          <button class="dev-button" data-app-comment-target="green">Game: Post Green HQ Update</button>
-          <button class="dev-button" data-app-comment-target="blue">Game: Post Blue HQ Update</button>
-          <button class="dev-button" data-user-comment-target="green">Post to Green HQ as Me</button>
-          <button class="dev-button" data-user-comment-target="blue">Post to Blue HQ as Me</button>
-        </div>
-        <p class="dev-panel__preview" id="dev-user-comment-preview"></p>
-        <p class="dev-panel__status" id="dev-status"></p>
-      </section>
     </main>
+    <div class="stats-ticker" aria-label="Game statistics">
+      <div class="stats-ticker__track">
+        HUMANITY ONLINE: 6,156 | AI WAVES REPELLED: 42 | SHIELD WALLS RAISED: 18 | SPIES DETECTED: 7 | WAR POSTS SENT:
+        128 | CURRENT CLOCK: 6156 |
+      </div>
+    </div>
     <script type="module" src="splash.ts" defer></script>
   </body>
 </html>
