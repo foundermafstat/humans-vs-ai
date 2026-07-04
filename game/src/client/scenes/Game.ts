@@ -16,6 +16,18 @@ const CHARACTER_IDS = [
 
 type CharacterId = (typeof CHARACTER_IDS)[number];
 
+function joinDailyBattle(army: ArmyColor): void {
+  void fetch('/api/player/join', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ army }),
+  }).catch(() => {
+    // Joining is retried on the next onboarding action or visit.
+  });
+}
+
 export class Game extends Phaser.Scene {
   private floor: Phaser.GameObjects.TileSprite | null = null;
   private identificationLayer: Phaser.GameObjects.Container | null = null;
@@ -202,6 +214,7 @@ export class Game extends Phaser.Scene {
     const layer = this.identificationLayer;
     this.selectedArmy = color;
     this.isTransitioning = true;
+    joinDailyBattle(color);
     this.tweens.killTweensOf(layer);
 
     this.tweens.add({

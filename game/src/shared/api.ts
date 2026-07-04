@@ -5,6 +5,40 @@ export type InitResponse = {
   username: string;
 };
 
+export type BattleView = "promo" | "countdown" | "summary";
+
+export type BattleStatus = "active" | "resolved";
+
+export type ArmyColor = "green" | "blue";
+
+export type BootstrapBattle = {
+  id: string;
+  battleDate: string;
+  status: BattleStatus;
+  postId: string;
+  postPermalink: string;
+  resolvesAt: string;
+  secondsUntilResolve: number;
+  resultSummary?: string;
+};
+
+export type BootstrapResponse = {
+  type: "bootstrap";
+  serverNow: string;
+  view: BattleView;
+  user: {
+    exists: boolean;
+  };
+  battle?: BootstrapBattle;
+};
+
+export type PlayerJoinResponse = {
+  type: "player-join";
+  user: {
+    exists: true;
+  };
+};
+
 export type IncrementResponse = {
   type: "increment";
   postId: string;

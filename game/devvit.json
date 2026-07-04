@@ -18,6 +18,11 @@
     "entry": "index.cjs"
   },
   "permissions": {
+    "http": {
+      "enable": true,
+      "domains": ["api.openai.com"]
+    },
+    "redis": true,
     "reddit": {
       "scope": "moderator",
       "asUser": ["SUBMIT_COMMENT"]
@@ -45,7 +50,37 @@
     "exampleForm": "/internal/form/example-submit"
   },
   "triggers": {
-    "onAppInstall": "/internal/triggers/on-app-install"
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade"
+  },
+  "scheduler": {
+    "tasks": {
+      "resolve-daily-battle-edt": {
+        "endpoint": "/internal/scheduler/resolve-daily-battle",
+        "cron": "0 1 * * *"
+      },
+      "resolve-daily-battle-est": {
+        "endpoint": "/internal/scheduler/resolve-daily-battle",
+        "cron": "0 2 * * *"
+      },
+      "create-daily-battle-edt": {
+        "endpoint": "/internal/scheduler/create-daily-battle",
+        "cron": "1 1 * * *"
+      },
+      "create-daily-battle-est": {
+        "endpoint": "/internal/scheduler/create-daily-battle",
+        "cron": "1 2 * * *"
+      }
+    }
+  },
+  "settings": {
+    "global": {
+      "openai_api_key": {
+        "type": "string",
+        "label": "OpenAI API Key",
+        "isSecret": true
+      }
+    }
   },
   "scripts": {
     "build": "vite build",

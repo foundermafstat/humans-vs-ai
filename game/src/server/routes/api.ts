@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import type {
+  ArmyColor,
+  BootstrapResponse,
   DecrementResponse,
   DevActionResponse,
   DevStateResponse,
@@ -8,8 +10,10 @@ import type {
   DevWarRoomState,
   IncrementResponse,
   InitResponse,
+  PlayerJoinResponse,
 } from '../../shared/api';
 import { DEV_GREEN_PROFILE, DEV_USER_COMMENT_TEXT } from '../../shared/api';
+import { getBootstrapResponse, joinCurrentPlayer } from '../core/dailyCycle';
 
 type ErrorResponse = {
   status: 'error';
@@ -238,6 +242,39 @@ api.get('/init', async (c) => {
     }
     return c.json<ErrorResponse>(
       { status: 'error', message: errorMessage },
+      400
+    );
+  }
+});
+
+api.get('/bootstrap', async (c) => {
+  try {
+    return c.json<BootstrapResponse>(await getBootstrapResponse());
+  } catch (error) {
+    console.error(`API Bootstrap Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: 'Failed to load daily battle state',
+      },
+      400
+    );
+  }
+});
+
+api.post('/player/join', async (c) => {
+  try {
+    const body: { army?: unknown } = await c.req.json().catch(() => ({}));
+    const army: ArmyColor = body.army === 'blue' ? 'blue' : 'green';
+
+    return c.json<PlayerJoinResponse>(await joinCurrentPlayer(army));
+  } catch (error) {
+    console.error(`API Player Join Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: 'Failed to join daily battle',
+      },
       400
     );
   }

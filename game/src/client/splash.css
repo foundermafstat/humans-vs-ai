@@ -95,6 +95,15 @@ body,
   text-shadow: 0 3px 0 #000000, 0 0 12px rgba(0, 0, 0, 0.8);
 }
 
+.state-detail {
+  max-width: 620px;
+  color: #f6dda0;
+  font-size: 18px;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 2px 0 #000000, 0 0 10px rgba(0, 0, 0, 0.72);
+}
+
 .start-button {
   min-width: 118px;
   height: 38px;

@@ -1,9 +1,11 @@
 import { context, requestExpandedMode } from '@devvit/web/client';
 import * as Phaser from 'phaser';
 import { AUTO, Game as PhaserGame, Scene } from 'phaser';
+import type { BootstrapResponse } from '../shared/api';
 
 const startButton = document.getElementById('start-button') as HTMLButtonElement;
 const titleElement = document.getElementById('title') as HTMLHeadingElement;
+const stateDetailElement = document.getElementById('state-detail') as HTMLParagraphElement;
 const gameLogoElement = document.getElementById('game-logo') as HTMLImageElement;
 
 const ARMY_VARIANTS = [
@@ -79,6 +81,89 @@ const GAME_LOGOS = [
   '/assets/logo2.webp',
   '/assets/logo3.webp',
 ] as const;
+let countdownInterval: number | undefined;
+
+function formatDuration(totalSeconds: number) {
+  const seconds = Math.max(0, totalSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function clearCountdown() {
+  if (countdownInterval === undefined) return;
+
+  window.clearInterval(countdownInterval);
+  countdownInterval = undefined;
+}
+
+function renderPromo() {
+  clearCountdown();
+  titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
+  stateDetailElement.textContent = 'A new daily war starts inside this post.';
+  startButton.textContent = 'Start';
+}
+
+function renderCountdown(bootstrap: BootstrapResponse) {
+  clearCountdown();
+
+  if (!bootstrap.battle) {
+    renderPromo();
+    return;
+  }
+
+  const serverNowMs = new Date(bootstrap.serverNow).getTime();
+  const clientStartedAtMs = Date.now();
+  const resolvesAtMs = new Date(bootstrap.battle.resolvesAt).getTime();
+  const updateCountdown = () => {
+    const estimatedServerNowMs = serverNowMs + Date.now() - clientStartedAtMs;
+    const secondsLeft = Math.ceil((resolvesAtMs - estimatedServerNowMs) / 1_000);
+
+    titleElement.textContent = `Daily battle ends in ${formatDuration(secondsLeft)}`;
+  };
+
+  updateCountdown();
+  countdownInterval = window.setInterval(updateCountdown, 1_000);
+  stateDetailElement.textContent = 'AI result posts at 21:00 ET.';
+  startButton.textContent = 'Open';
+}
+
+function renderSummary(bootstrap: BootstrapResponse) {
+  clearCountdown();
+  titleElement.textContent = 'Battle report is ready';
+  stateDetailElement.textContent =
+    bootstrap.battle?.resultSummary ?? 'The AI has posted the result of the daily battle.';
+  startButton.textContent = 'View';
+}
+
+async function loadBattleState() {
+  try {
+    const response = await fetch('/api/bootstrap');
+    if (!response.ok) {
+      renderPromo();
+      return;
+    }
+
+    const bootstrap: BootstrapResponse = await response.json();
+
+    if (bootstrap.view === 'summary') {
+      renderSummary(bootstrap);
+      return;
+    }
+
+    if (bootstrap.view === 'countdown') {
+      renderCountdown(bootstrap);
+      return;
+    }
+
+    renderPromo();
+  } catch {
+    renderPromo();
+  }
+}
+
 const BODY_OFFSETS: Record<ArmySource, { x: number; y: number }> = {
   blue: { x: -18, y: 22 },
   green: { x: -18, y: 25 },
@@ -832,6 +917,6 @@ startButton.addEventListener('click', (event) => {
   requestExpandedMode(event, 'game');
 });
 
-titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
+void loadBattleState();
 setupGameLogo();
 startBattlefield();
