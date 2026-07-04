@@ -104,6 +104,14 @@ body,
   text-shadow: 0 2px 0 #000000, 0 0 10px rgba(0, 0, 0, 0.72);
 }
 
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
 .start-button {
   min-width: 118px;
   height: 38px;
@@ -120,10 +128,65 @@ body,
   box-shadow: 0 4px 0 #6d3a18;
 }
 
+.test-message-button,
+.comments-button {
+  height: 38px;
+  border: 2px solid #1f130b;
+  border-radius: 6px;
+  color: #1f130b;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.test-message-button {
+  min-width: 136px;
+  background: #d7edf2;
+  font-size: 22px;
+  box-shadow: 0 4px 0 #2c5d68;
+}
+
+.comments-button {
+  min-width: 150px;
+  font-size: 20px;
+}
+
+.comments-button--green {
+  background: #9ee86e;
+  box-shadow: 0 4px 0 #2c6f28;
+}
+
+.comments-button--blue {
+  background: #91d7ff;
+  box-shadow: 0 4px 0 #245a89;
+}
+
+.test-message-button:disabled,
+.comments-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .start-button:active {
   animation: none;
   transform: translateY(2px) scale(0.98);
   box-shadow: 0 2px 0 #6d3a18;
+}
+
+.test-message-button:active:not(:disabled),
+.comments-button:active:not(:disabled) {
+  transform: translateY(2px) scale(0.98);
+}
+
+.test-message-button:active:not(:disabled) {
+  box-shadow: 0 2px 0 #2c5d68;
+}
+
+.comments-button--green:active:not(:disabled) {
+  box-shadow: 0 2px 0 #2c6f28;
+}
+
+.comments-button--blue:active:not(:disabled) {
+  box-shadow: 0 2px 0 #245a89;
 }
 
 @keyframes start-button-breathe {

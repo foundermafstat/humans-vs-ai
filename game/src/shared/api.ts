@@ -11,6 +11,8 @@ export type BattleStatus = "active" | "resolved";
 
 export type ArmyColor = "green" | "blue";
 
+export type DivisionTarget = "green" | "blue";
+
 export type BootstrapBattle = {
   id: string;
   battleDate: string;
@@ -37,6 +39,19 @@ export type PlayerJoinResponse = {
   user: {
     exists: true;
   };
+};
+
+export type AiReportResponse = {
+  type: "ai-report";
+  message: string;
+  commentPermalink: string;
+};
+
+export type DivisionCommentAnalysisResponse = {
+  type: "division-comment-analysis";
+  target: DivisionTarget;
+  message: string;
+  commentPermalink: string;
 };
 
 export type IncrementResponse = {

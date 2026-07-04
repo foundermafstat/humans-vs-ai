@@ -1,13 +1,17 @@
-import { context, redis, reddit } from '@devvit/web/server';
+import { context, redis, reddit, settings } from '@devvit/web/server';
 import type {
+  AiReportResponse,
   ArmyColor,
   BootstrapBattle,
   BootstrapResponse,
   BattleStatus,
   DevThreadTarget,
   DevWarRoomState,
+  DivisionCommentAnalysisResponse,
+  DivisionTarget,
   PlayerJoinResponse,
 } from '../../shared/api';
+import { DOCTRINE_LIST } from './doctrines';
 
 type NewYorkParts = {
   year: number;
@@ -38,16 +42,65 @@ type DailyTaskResult = {
 };
 
 type RedditCommentTargetId = `t1_${string}` | `t3_${string}`;
+type RedditPostId = `t3_${string}`;
+type RedditCommentId = `t1_${string}`;
+
+type DivisionCommentTreeNode = {
+  id: string;
+  parentId: string;
+  authorName: string;
+  body: string;
+  createdAt: Date;
+  score: number;
+  replies: {
+    children: DivisionCommentTreeNode[];
+    all(): Promise<DivisionCommentTreeNode[]>;
+  };
+};
+
+type DivisionBranchComment = {
+  id: string;
+  parentId: string;
+  authorName: string;
+  body: string;
+  createdAt: Date;
+  score: number;
+  depth: number;
+};
+
+type OpenAIResponse = {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      text?: string;
+      type?: string;
+    }>;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
 
 const NEW_YORK_TIME_ZONE = 'America/New_York';
 const CURRENT_BATTLE_KEY = 'app:current_battle';
 const PLAYERS_KEY = 'app:players';
 const DAILY_POST_TITLE_PREFIX = 'Humans vs AI Daily Battle';
+const OPENAI_API_KEY_SETTING = 'openai_api_key';
+const OPENAI_REPORT_MODEL = 'gpt-5.4-nano';
+const MAX_BRANCH_COMMENTS = 50;
+const MAX_PROMPT_COMMENTS = 25;
+const MAX_COMMENT_BODY_CHARS = 320;
+const MAX_COMMENT_TREE_DEPTH = 6;
 
 const THREAD_TITLES: Record<DevThreadTarget, string> = {
   ai: 'AI Responses',
   green: 'Green HQ',
   blue: 'Blue HQ',
+};
+
+const DIVISION_LABELS: Record<DivisionTarget, string> = {
+  green: 'Green',
+  blue: 'Blue',
 };
 
 const THREAD_BODIES: Record<DevThreadTarget, string> = {
@@ -149,6 +202,26 @@ function getRedditCommentTargetId(id: string): RedditCommentTargetId {
   if (isRedditCommentTargetId(id)) return id;
 
   throw new Error(`Invalid Reddit comment target id: ${id}`);
+}
+
+function isRedditPostId(id: string): id is RedditPostId {
+  return id.startsWith('t3_');
+}
+
+function getRedditPostId(id: string): RedditPostId {
+  if (isRedditPostId(id)) return id;
+
+  throw new Error(`Invalid Reddit post id: ${id}`);
+}
+
+function isRedditCommentId(id: string): id is RedditCommentId {
+  return id.startsWith('t1_');
+}
+
+function getRedditCommentId(id: string): RedditCommentId {
+  if (isRedditCommentId(id)) return id;
+
+  throw new Error(`Invalid Reddit comment id: ${id}`);
 }
 
 function parseNumber(value: string | undefined) {
@@ -269,6 +342,25 @@ function isDailyBattle(value: unknown): value is DailyBattle {
   );
 }
 
+function isWarRoomState(value: unknown): value is DevWarRoomState {
+  if (!isRecord(value)) return false;
+  if (!isRecord(value.threadIds) || !isRecord(value.threadPermalinks)) return false;
+
+  return (
+    typeof value.postId === 'string' &&
+    typeof value.postPermalink === 'string' &&
+    typeof value.indexCommentId === 'string' &&
+    typeof value.indexPermalink === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.threadIds.ai === 'string' &&
+    typeof value.threadIds.green === 'string' &&
+    typeof value.threadIds.blue === 'string' &&
+    typeof value.threadPermalinks.ai === 'string' &&
+    typeof value.threadPermalinks.green === 'string' &&
+    typeof value.threadPermalinks.blue === 'string'
+  );
+}
+
 function parseDailyBattle(rawBattle: string | undefined) {
   if (!rawBattle) return undefined;
 
@@ -287,6 +379,16 @@ async function getCurrentBattle() {
   if (!battleId) return undefined;
 
   return await getBattleById(battleId);
+}
+
+async function getWarRoom(postId: string) {
+  const rawState = await redis.get(getWarRoomKey(postId));
+  if (!rawState) return undefined;
+
+  const parsed: unknown = JSON.parse(rawState);
+  if (!isWarRoomState(parsed)) return undefined;
+
+  return parsed;
 }
 
 async function getBattleForCurrentPost() {
@@ -326,6 +428,155 @@ function createDeterministicResult(battle: DailyBattle) {
     resultSummary: `${outcome.winner}. ${outcome.summary}`,
     aiComment: outcome.aiComment,
   };
+}
+
+function extractOpenAIText(response: OpenAIResponse) {
+  if (typeof response.output_text === 'string' && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  for (const output of response.output ?? []) {
+    for (const content of output.content ?? []) {
+      if (typeof content.text === 'string' && content.text.trim()) {
+        return content.text.trim();
+      }
+    }
+  }
+
+  return undefined;
+}
+
+async function requestOpenAIText(input: string, maxOutputTokens: number) {
+  const apiKey = await settings.get<string>(OPENAI_API_KEY_SETTING);
+  if (!apiKey) throw new Error('OpenAI API key is not configured');
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_REPORT_MODEL,
+      input,
+      max_output_tokens: maxOutputTokens,
+    }),
+  });
+  const body: OpenAIResponse = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error?.message ?? 'OpenAI request failed');
+  }
+
+  const report = extractOpenAIText(body);
+  if (!report) throw new Error('OpenAI response did not include text');
+
+  return report;
+}
+
+async function generateAiStatusReport(input: {
+  battleDate: string;
+  serverNow: string;
+  secondsUntilResolve: number;
+  playerCount: number;
+}) {
+  return await requestOpenAIText(
+    [
+      'Write a short in-universe AI branch status report for the Humans vs AI Reddit game.',
+      `Today battle date: ${input.battleDate}.`,
+      `Server time: ${input.serverNow}.`,
+      `Seconds until today's battle result: ${input.secondsUntilResolve}.`,
+      `Registered players in Redis: ${input.playerCount}.`,
+      'Keep it under 45 words. No markdown table. Start with "AI STATUS //".',
+    ].join('\n'),
+    90,
+  );
+}
+
+function compactPromptText(value: string, maxChars: number) {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxChars) return compact;
+
+  return `${compact.slice(0, maxChars - 3)}...`;
+}
+
+function createDoctrinePromptText() {
+  return DOCTRINE_LIST.map((doctrine) => {
+    const beats = doctrine.beats.map((entry) => entry.target).join(', ');
+
+    return [
+      `${doctrine.id} (${doctrine.name})`,
+      `Theme: ${doctrine.theme}.`,
+      `Role: ${doctrine.combatRole}`,
+      `Beats: ${beats}.`,
+      `Loses to: ${doctrine.losesTo.join(', ')}.`,
+    ].join(' ');
+  }).join('\n');
+}
+
+function createDivisionCommentsPromptText(comments: readonly DivisionBranchComment[]) {
+  if (comments.length === 0) return 'No replies found in this division branch yet.';
+
+  return comments.slice(0, MAX_PROMPT_COMMENTS).map((comment, index) => {
+    const body = compactPromptText(comment.body, MAX_COMMENT_BODY_CHARS);
+    const createdAt = comment.createdAt.toISOString();
+    const threadPosition = comment.depth === 0 ? 'top-level' : `reply depth ${comment.depth} to ${comment.parentId}`;
+
+    return `${index + 1}. ${threadPosition} | u/${comment.authorName} | score ${comment.score} | ${createdAt}: ${body}`;
+  }).join('\n');
+}
+
+async function collectDivisionBranchComments(
+  comments: readonly DivisionCommentTreeNode[],
+  depth = 0,
+  collected: DivisionBranchComment[] = [],
+): Promise<DivisionBranchComment[]> {
+  for (const comment of comments) {
+    if (collected.length >= MAX_BRANCH_COMMENTS) break;
+
+    collected.push({
+      id: comment.id,
+      parentId: comment.parentId,
+      authorName: comment.authorName,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      score: comment.score,
+      depth,
+    });
+
+    if (depth + 1 >= MAX_COMMENT_TREE_DEPTH || collected.length >= MAX_BRANCH_COMMENTS) continue;
+
+    const replies = await comment.replies.all().catch(() => comment.replies.children);
+    await collectDivisionBranchComments(replies, depth + 1, collected);
+  }
+
+  return collected;
+}
+
+async function generateDivisionCommentAnalysis(input: {
+  target: DivisionTarget;
+  battleDate: string;
+  comments: readonly DivisionBranchComment[];
+}) {
+  const label = DIVISION_LABELS[input.target];
+
+  return await requestOpenAIText(
+    [
+      `Analyze the ${label} division Reddit branch for the Humans vs AI daily battle.`,
+      'Infer the division intent from the comments and choose the single best doctrine that helps this division win.',
+      'Choose exactly one doctrine id from this list. Do not invent doctrine ids.',
+      '',
+      createDoctrinePromptText(),
+      '',
+      `Battle date: ${input.battleDate}.`,
+      `Branch comments and nested replies, newest first within loaded Reddit pages (${input.comments.length} loaded):`,
+      createDivisionCommentsPromptText(input.comments),
+      '',
+      'Use nested replies as meaningful context, especially when they correct, reject, or refine a parent comment.',
+      `Output under 85 words. Start with "AI COMMENT ANALYSIS // ${label.toUpperCase()}".`,
+      'Include exactly one line: "Recommended doctrine: <ID>".',
+    ].join('\n'),
+    170,
+  );
 }
 
 function getRateLimitDelayMs(error: unknown) {
@@ -519,6 +770,75 @@ export async function joinCurrentPlayer(army: ArmyColor): Promise<PlayerJoinResp
     user: {
       exists: true,
     },
+  };
+}
+
+export async function postAiStatusReport(): Promise<AiReportResponse> {
+  const now = new Date();
+  const battle = (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+  if (!battle) throw new Error('No current battle found');
+
+  const warRoom = await getWarRoom(battle.postId);
+  if (!warRoom) throw new Error('AI branch is not initialized for the current battle');
+
+  const playerCount = await redis.hLen(PLAYERS_KEY);
+  const secondsUntilResolve = Math.max(
+    0,
+    Math.ceil((new Date(battle.resolvesAt).getTime() - now.getTime()) / 1_000),
+  );
+  const report = await generateAiStatusReport({
+    battleDate: battle.battleDate,
+    serverNow: now.toISOString(),
+    secondsUntilResolve,
+    playerCount,
+  });
+  const comment = await withRedditRateLimitRetry(() => reddit.submitComment({
+    id: getRedditCommentTargetId(warRoom.threadIds.ai),
+    text: report,
+    runAs: 'APP',
+  }));
+
+  return {
+    type: 'ai-report',
+    message: report,
+    commentPermalink: comment.permalink,
+  };
+}
+
+export async function postDivisionCommentAnalysis(
+  target: DivisionTarget,
+): Promise<DivisionCommentAnalysisResponse> {
+  const battle = (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+  if (!battle) throw new Error('No current battle found');
+
+  const warRoom = await getWarRoom(battle.postId);
+  if (!warRoom) throw new Error('War room is not initialized for the current battle');
+
+  const branchComments = await reddit.getComments({
+    postId: getRedditPostId(battle.postId),
+    commentId: getRedditCommentId(warRoom.threadIds[target]),
+    depth: MAX_COMMENT_TREE_DEPTH,
+    limit: MAX_BRANCH_COMMENTS,
+    pageSize: MAX_BRANCH_COMMENTS,
+    sort: 'new',
+  }).all();
+  const promptComments = await collectDivisionBranchComments(branchComments);
+  const message = await generateDivisionCommentAnalysis({
+    target,
+    battleDate: battle.battleDate,
+    comments: promptComments,
+  });
+  const comment = await withRedditRateLimitRetry(() => reddit.submitComment({
+    id: getRedditCommentTargetId(warRoom.threadIds.ai),
+    text: message,
+    runAs: 'APP',
+  }));
+
+  return {
+    type: 'division-comment-analysis',
+    target,
+    message,
+    commentPermalink: comment.permalink,
   };
 }
 

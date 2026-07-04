@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import type {
+  AiReportResponse,
   ArmyColor,
   BootstrapResponse,
   DecrementResponse,
@@ -8,12 +9,19 @@ import type {
   DevStateResponse,
   DevThreadTarget,
   DevWarRoomState,
+  DivisionCommentAnalysisResponse,
+  DivisionTarget,
   IncrementResponse,
   InitResponse,
   PlayerJoinResponse,
 } from '../../shared/api';
 import { DEV_GREEN_PROFILE, DEV_USER_COMMENT_TEXT } from '../../shared/api';
-import { getBootstrapResponse, joinCurrentPlayer } from '../core/dailyCycle';
+import {
+  getBootstrapResponse,
+  joinCurrentPlayer,
+  postAiStatusReport,
+  postDivisionCommentAnalysis,
+} from '../core/dailyCycle';
 
 type ErrorResponse = {
   status: 'error';
@@ -78,6 +86,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isCommentId(id: string): id is RedditCommentId {
   return id.startsWith('t1_');
+}
+
+function isDivisionTarget(value: unknown): value is DivisionTarget {
+  return value === 'green' || value === 'blue';
 }
 
 function getErrorMessage(error: unknown) {
@@ -274,6 +286,47 @@ api.post('/player/join', async (c) => {
       {
         status: 'error',
         message: 'Failed to join daily battle',
+      },
+      400
+    );
+  }
+});
+
+api.post('/ai/test-message', async (c) => {
+  try {
+    return c.json<AiReportResponse>(await postAiStatusReport());
+  } catch (error) {
+    console.error(`API AI Test Message Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to post AI test message',
+      },
+      400
+    );
+  }
+});
+
+api.post('/ai/comments-analysis', async (c) => {
+  try {
+    const body: { target?: unknown } = await c.req.json().catch(() => ({}));
+    if (!isDivisionTarget(body.target)) {
+      return c.json<ErrorResponse>(
+        {
+          status: 'error',
+          message: 'target must be green or blue',
+        },
+        400
+      );
+    }
+
+    return c.json<DivisionCommentAnalysisResponse>(await postDivisionCommentAnalysis(body.target));
+  } catch (error) {
+    console.error(`API AI Comments Analysis Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to post AI comments analysis',
       },
       400
     );

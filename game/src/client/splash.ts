@@ -1,9 +1,17 @@
 import { context, requestExpandedMode } from '@devvit/web/client';
 import * as Phaser from 'phaser';
 import { AUTO, Game as PhaserGame, Scene } from 'phaser';
-import type { BootstrapResponse } from '../shared/api';
+import type {
+  AiReportResponse,
+  BootstrapResponse,
+  DivisionCommentAnalysisResponse,
+  DivisionTarget,
+} from '../shared/api';
 
 const startButton = document.getElementById('start-button') as HTMLButtonElement;
+const testMessageButton = document.getElementById('test-message-button') as HTMLButtonElement;
+const commentsGreenButton = document.getElementById('comments-green-button') as HTMLButtonElement;
+const commentsBlueButton = document.getElementById('comments-blue-button') as HTMLButtonElement;
 const titleElement = document.getElementById('title') as HTMLHeadingElement;
 const stateDetailElement = document.getElementById('state-detail') as HTMLParagraphElement;
 const gameLogoElement = document.getElementById('game-logo') as HTMLImageElement;
@@ -161,6 +169,61 @@ async function loadBattleState() {
     renderPromo();
   } catch {
     renderPromo();
+  }
+}
+
+async function postTestMessage() {
+  const originalLabel = testMessageButton.textContent ?? 'Test message';
+  testMessageButton.disabled = true;
+  testMessageButton.textContent = 'Posting...';
+
+  try {
+    const response = await fetch('/api/ai/test-message', {
+      method: 'POST',
+    });
+    const body: AiReportResponse | { message?: string } = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      stateDetailElement.textContent = body.message ?? 'AI test message failed.';
+      return;
+    }
+
+    stateDetailElement.textContent = 'AI test report posted to the AI branch.';
+  } catch {
+    stateDetailElement.textContent = 'AI test message failed.';
+  } finally {
+    testMessageButton.disabled = false;
+    testMessageButton.textContent = originalLabel;
+  }
+}
+
+async function postCommentsAnalysis(target: DivisionTarget, button: HTMLButtonElement) {
+  const originalLabel = button.textContent ?? 'Comments';
+  const label = target === 'green' ? 'Green' : 'Blue';
+  button.disabled = true;
+  button.textContent = 'Analyzing...';
+
+  try {
+    const response = await fetch('/api/ai/comments-analysis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ target }),
+    });
+    const body: DivisionCommentAnalysisResponse | { message?: string } = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      stateDetailElement.textContent = body.message ?? `${label} comments analysis failed.`;
+      return;
+    }
+
+    stateDetailElement.textContent = `AI ${label} comments analysis posted to the AI branch.`;
+  } catch {
+    stateDetailElement.textContent = `${label} comments analysis failed.`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
   }
 }
 
@@ -915,6 +978,18 @@ function startBattlefield() {
 
 startButton.addEventListener('click', (event) => {
   requestExpandedMode(event, 'game');
+});
+
+testMessageButton.addEventListener('click', () => {
+  void postTestMessage();
+});
+
+commentsGreenButton.addEventListener('click', () => {
+  void postCommentsAnalysis('green', commentsGreenButton);
+});
+
+commentsBlueButton.addEventListener('click', () => {
+  void postCommentsAnalysis('blue', commentsBlueButton);
 });
 
 void loadBattleState();
