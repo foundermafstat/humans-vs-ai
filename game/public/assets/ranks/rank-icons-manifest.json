@@ -1,0 +1,606 @@
+{
+  "asset": "imagegen-generated humorous pixel rank icons final centered 64px",
+  "iconSize": [
+    64,
+    64
+  ],
+  "grid": {
+    "columns": 8,
+    "rows": 6
+  },
+  "sourceReference": "source/reference-generated-rank-icons-input.png",
+  "problemReferences": [
+    "source/problem-bars-too-similar.png",
+    "source/problem-final-icons-overloaded.png"
+  ],
+  "imagegenSource": "source/imagegen-rank-icons-final-chroma.png",
+  "alphaSource": "source/imagegen-rank-icons-final-alpha.png",
+  "style": "imagegen raster pixel-art rank insignia inspired by US military progression with humans-vs-AI parody motifs",
+  "postProcess": "chroma-key alpha extraction, connected-component grouping per grid cell, isolated component crop, centered 64x64 nearest-neighbor resize; no local icon drawing",
+  "progression": [
+    "1-3: one, two, three chevrons",
+    "4-8: chevrons plus stars and rockers",
+    "9-16: senior enlisted chevrons, rockers, stars, and small AI-war accents",
+    "17-24: distinct warrant bars and technical badges",
+    "25-32: clean officer bars, leaves, and eagles",
+    "33-48: clean general and high-command military insignia"
+  ],
+  "ranks": [
+    {
+      "index": 1,
+      "name": "Captcha Casualty",
+      "file": "icons/rank_01_captcha_casualty.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 2,
+      "name": "Prompt Peasant",
+      "file": "icons/rank_02_prompt_peasant.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 3,
+      "name": "Keyboard Militia",
+      "file": "icons/rank_03_keyboard_militia.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 4,
+      "name": "Tin Foil Recruit",
+      "file": "icons/rank_04_tin_foil_recruit.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 5,
+      "name": "Spreadsheet Survivor",
+      "file": "icons/rank_05_spreadsheet_survivor.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 6,
+      "name": "Copy-Paste Cadet",
+      "file": "icons/rank_06_copy_paste_cadet.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 7,
+      "name": "Algorithm Alarmist",
+      "file": "icons/rank_07_algorithm_alarmist.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 8,
+      "name": "Ctrl+Z Fighter",
+      "file": "icons/rank_08_ctrl_plus_z_fighter.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 9,
+      "name": "Meme Infantry",
+      "file": "icons/rank_09_meme_infantry.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 10,
+      "name": "CAPTCHA Squire",
+      "file": "icons/rank_10_captcha_squire.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 11,
+      "name": "Wi-Fi Trench Scout",
+      "file": "icons/rank_11_wi_fi_trench_scout.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 12,
+      "name": "Prompt Dodger",
+      "file": "icons/rank_12_prompt_dodger.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 13,
+      "name": "AI Panic Intern",
+      "file": "icons/rank_13_ai_panic_intern.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 14,
+      "name": "Forum Skirmisher",
+      "file": "icons/rank_14_forum_skirmisher.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 15,
+      "name": "Bot-Spotting Corporal",
+      "file": "icons/rank_15_bot_spotting_corporal.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 16,
+      "name": "Neural Net Naysayer",
+      "file": "icons/rank_16_neural_net_naysayer.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 17,
+      "name": "JPEG Resistance Trooper",
+      "file": "icons/rank_17_jpeg_resistance_trooper.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 18,
+      "name": "Deepfake Detective",
+      "file": "icons/rank_18_deepfake_detective.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 19,
+      "name": "Anti-AutoComplete Sergeant",
+      "file": "icons/rank_19_anti_autocomplete_sergeant.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 20,
+      "name": "Spam Folder Veteran",
+      "file": "icons/rank_20_spam_folder_veteran.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 21,
+      "name": "Doomscroll Lieutenant",
+      "file": "icons/rank_21_doomscroll_lieutenant.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 22,
+      "name": "Firewall Knight",
+      "file": "icons/rank_22_firewall_knight.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 23,
+      "name": "Prompt Injection Ranger",
+      "file": "icons/rank_23_prompt_injection_ranger.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 24,
+      "name": "Model Collapse Monk",
+      "file": "icons/rank_24_model_collapse_monk.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 128,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 25,
+      "name": "CAPTCHA Paladin",
+      "file": "icons/rank_25_captcha_paladin.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 26,
+      "name": "Meme War Chaplain",
+      "file": "icons/rank_26_meme_war_chaplain.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 27,
+      "name": "Hallucination Hunter",
+      "file": "icons/rank_27_hallucination_hunter.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 28,
+      "name": "Token Economy Warlord",
+      "file": "icons/rank_28_token_economy_warlord.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 29,
+      "name": "GPU Siege Captain",
+      "file": "icons/rank_29_gpu_siege_captain.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 30,
+      "name": "Dataset Raider",
+      "file": "icons/rank_30_dataset_raider.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 31,
+      "name": "Bias Exorcist",
+      "file": "icons/rank_31_bias_exorcist.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 32,
+      "name": "Luddite Commander",
+      "file": "icons/rank_32_luddite_commander.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 192,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 33,
+      "name": "Synthetic Slop Slayer",
+      "file": "icons/rank_33_synthetic_slop_slayer.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 34,
+      "name": "Anti-Bot Inquisitor",
+      "file": "icons/rank_34_anti_bot_inquisitor.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 35,
+      "name": "Turing Test Duelist",
+      "file": "icons/rank_35_turing_test_duelist.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 36,
+      "name": "Reddit Uprising Marshal",
+      "file": "icons/rank_36_reddit_uprising_marshal.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 37,
+      "name": "Doom Prophet of the Feed",
+      "file": "icons/rank_37_doom_prophet_of_the_feed.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 38,
+      "name": "Grandmaster of Manual Labor",
+      "file": "icons/rank_38_grandmaster_of_manual_labor.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 39,
+      "name": "Supreme Prompt Breaker",
+      "file": "icons/rank_39_supreme_prompt_breaker.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 40,
+      "name": "Commander of the Human Lag",
+      "file": "icons/rank_40_commander_of_the_human_lag.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 256,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 41,
+      "name": "Archduke of Analog Truth",
+      "file": "icons/rank_41_archduke_of_analog_truth.png",
+      "sheetFrame": {
+        "x": 0,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 42,
+      "name": "High Admiral of the Offline Fleet",
+      "file": "icons/rank_42_high_admiral_of_the_offline_fleet.png",
+      "sheetFrame": {
+        "x": 64,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 43,
+      "name": "Lord of the Final CAPTCHA",
+      "file": "icons/rank_43_lord_of_the_final_captcha.png",
+      "sheetFrame": {
+        "x": 128,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 44,
+      "name": "Saint of the Broken Algorithm",
+      "file": "icons/rank_44_saint_of_the_broken_algorithm.png",
+      "sheetFrame": {
+        "x": 192,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 45,
+      "name": "Emperor of Unoptimized Humanity",
+      "file": "icons/rank_45_emperor_of_unoptimized_humanity.png",
+      "sheetFrame": {
+        "x": 256,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 46,
+      "name": "The Last Organic Moderator",
+      "file": "icons/rank_46_the_last_organic_moderator.png",
+      "sheetFrame": {
+        "x": 320,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 47,
+      "name": "Supreme Warlord of the Comment Section",
+      "file": "icons/rank_47_supreme_warlord_of_the_comment_section.png",
+      "sheetFrame": {
+        "x": 384,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    },
+    {
+      "index": 48,
+      "name": "Eternal Champion of Meatspace",
+      "file": "icons/rank_48_eternal_champion_of_meatspace.png",
+      "sheetFrame": {
+        "x": 448,
+        "y": 320,
+        "w": 64,
+        "h": 64
+      },
+      "componentCount": 1
+    }
+  ]
+}
