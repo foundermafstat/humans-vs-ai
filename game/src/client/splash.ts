@@ -89,6 +89,7 @@ const GAME_LOGOS = [
   '/assets/logo2.webp',
   '/assets/logo3.webp',
 ] as const;
+const devToolsEnabled = new URLSearchParams(window.location.search).get('dev') === '1';
 let countdownInterval: number | undefined;
 
 function formatDuration(totalSeconds: number) {
@@ -110,7 +111,7 @@ function clearCountdown() {
 function renderPromo() {
   clearCountdown();
   titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
-  stateDetailElement.textContent = 'A new daily war starts inside this post.';
+  stateDetailElement.textContent = 'A new 7-doctrine war starts inside this post.';
   startButton.textContent = 'Start';
 }
 
@@ -134,7 +135,9 @@ function renderCountdown(bootstrap: BootstrapResponse) {
 
   updateCountdown();
   countdownInterval = window.setInterval(updateCountdown, 1_000);
-  stateDetailElement.textContent = 'AI result posts at 21:00 ET.';
+  stateDetailElement.textContent = bootstrap.battle.activeTerritory
+    ? `${bootstrap.battle.activeTerritory.name} is active. Owner: ${bootstrap.battle.activeTerritory.owner}.`
+    : 'AI result posts at 21:00 ET.';
   startButton.textContent = 'Open';
 }
 
@@ -142,7 +145,9 @@ function renderSummary(bootstrap: BootstrapResponse) {
   clearCountdown();
   titleElement.textContent = 'Battle report is ready';
   stateDetailElement.textContent =
-    bootstrap.battle?.resultSummary ?? 'The AI has posted the result of the daily battle.';
+    bootstrap.battle?.result?.reportText ??
+    bootstrap.battle?.resultSummary ??
+    'The AI has posted the result of the daily battle.';
   startButton.textContent = 'View';
 }
 
@@ -992,6 +997,9 @@ commentsBlueButton.addEventListener('click', () => {
   void postCommentsAnalysis('blue', commentsBlueButton);
 });
 
+testMessageButton.hidden = !devToolsEnabled;
+commentsGreenButton.hidden = !devToolsEnabled;
+commentsBlueButton.hidden = !devToolsEnabled;
 void loadBattleState();
 setupGameLogo();
 startBattlefield();

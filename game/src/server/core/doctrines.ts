@@ -1,11 +1,6 @@
-export type DoctrineId =
-  | 'STRIKE'
-  | 'HACK'
-  | 'VIRUS'
-  | 'PHANTOM'
-  | 'SHIELD'
-  | 'OVERLOAD'
-  | 'TRAP';
+import { DOCTRINE_IDS, type DoctrineId } from '../../shared/api';
+
+export type { DoctrineId } from '../../shared/api';
 
 export type DoctrineOutcome = 'win' | 'loss' | 'draw';
 
@@ -31,15 +26,7 @@ export type DoctrineMatchup = {
   reason: string;
 };
 
-export const DOCTRINE_ORDER: readonly DoctrineId[] = [
-  'STRIKE',
-  'HACK',
-  'VIRUS',
-  'PHANTOM',
-  'SHIELD',
-  'OVERLOAD',
-  'TRAP',
-];
+export const DOCTRINE_ORDER: readonly DoctrineId[] = DOCTRINE_IDS;
 
 export const DOCTRINES: Record<DoctrineId, DoctrineDefinition> = {
   STRIKE: {

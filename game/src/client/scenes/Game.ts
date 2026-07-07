@@ -16,15 +16,13 @@ const CHARACTER_IDS = [
 
 type CharacterId = (typeof CHARACTER_IDS)[number];
 
-function joinDailyBattle(army: ArmyColor): void {
-  void fetch('/api/player/join', {
+async function joinDailyBattle(army: ArmyColor): Promise<void> {
+  await fetch('/api/player/join', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ army }),
-  }).catch(() => {
-    // Joining is retried on the next onboarding action or visit.
   });
 }
 
@@ -214,7 +212,11 @@ export class Game extends Phaser.Scene {
     const layer = this.identificationLayer;
     this.selectedArmy = color;
     this.isTransitioning = true;
-    joinDailyBattle(color);
+    void joinDailyBattle(color).then(() => {
+      window.dispatchEvent(new CustomEvent('humans-vs-ai:player-joined'));
+    }).catch(() => {
+      this.isTransitioning = false;
+    });
     this.tweens.killTweensOf(layer);
 
     this.tweens.add({

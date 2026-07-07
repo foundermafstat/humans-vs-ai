@@ -229,7 +229,7 @@ collaborative storytelling без уникальной механики.
 - карта / точка конфликта на фоне;
 - таймер события;
 - две дивизии против ИИ;
-- три доктрины Strike / Shield / Hack;
+- семь доктрин Strike / Hack / Virus / Phantom / Shield / Overload / Trap;
 - секретный шпионский момент как вау-сцена;
 - минимум текста.
 ```
@@ -561,7 +561,7 @@ desktop inline:
 - таймер;
 - две дивизии;
 - ИИ;
-- три доктрины;
+- семь доктрин как основной readable choice;
 - статус подозрительной активности;
 - CTA.
 ```
@@ -1299,7 +1299,7 @@ Posts are battlefields. Comments are war rooms. Humanity is not coordinated.
 4. Есть одна активная территория.
 5. Есть две дивизии и ИИ.
 6. Игрок выбирает дивизию из 2–3 recommended divisions.
-7. Игрок может отдать приказ: Strike / Shield / Hack.
+7. Игрок может отдать приказ одной из 7 доктрин: Strike / Hack / Virus / Phantom / Shield / Overload / Trap.
 8. Игрок выбирает доктрину + поддействие.
 9. В фазе есть таймер 3 минуты для demo.
 10. Результат считается по формуле.

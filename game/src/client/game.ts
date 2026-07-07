@@ -5,7 +5,12 @@ import { MainMenu } from './scenes/MainMenu';
 import * as Phaser from 'phaser';
 import { AUTO, Game } from 'phaser';
 import { Preloader } from './scenes/Preloader';
-import type { BootstrapResponse } from '../shared/api';
+import {
+  DOCTRINE_IDS,
+  type BootstrapResponse,
+  type DoctrineId,
+  type OrderResponse,
+} from '../shared/api';
 
 //  Find out more information about the Game Config at:
 //  https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
@@ -31,6 +36,16 @@ const StartGame = (parent: string) => {
 let activeGame: Game | undefined;
 let stateScreenElement: HTMLElement | undefined;
 
+const DOCTRINE_CARD_TEXT: Record<DoctrineId, string> = {
+  STRIKE: 'Assault. Breaks Hack, Virus, Phantom.',
+  HACK: 'Exploit. Breaks Virus, Phantom, Shield.',
+  VIRUS: 'Corruption. Breaks Phantom, Shield, Overload.',
+  PHANTOM: 'Stealth. Breaks Shield, Overload, Trap.',
+  SHIELD: 'Defense. Breaks Overload, Trap, Strike.',
+  OVERLOAD: 'Swarm. Breaks Trap, Strike, Hack.',
+  TRAP: 'Ambush. Breaks Strike, Hack, Virus.',
+};
+
 function formatDuration(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
   const hours = Math.floor(seconds / 3600);
@@ -52,6 +67,11 @@ function startPhaserGame() {
   activeGame = StartGame('game-container');
 }
 
+function stopPhaserGame() {
+  activeGame?.destroy(true);
+  activeGame = undefined;
+}
+
 function appendText(parent: HTMLElement, tagName: 'h1' | 'p', className: string, text: string) {
   const element = document.createElement(tagName);
   element.className = className;
@@ -69,6 +89,63 @@ function createActionButton(label: string) {
   button.addEventListener('click', startPhaserGame);
 
   return button;
+}
+
+function createDoctrineButton(doctrineId: DoctrineId, onSubmit: (doctrineId: DoctrineId) => void) {
+  const button = document.createElement('button');
+  button.className = 'game-state-screen__doctrine';
+  button.type = 'button';
+  button.innerHTML = `<strong>${doctrineId}</strong><span>${DOCTRINE_CARD_TEXT[doctrineId]}</span>`;
+  button.addEventListener('click', () => onSubmit(doctrineId));
+
+  return button;
+}
+
+async function submitDoctrineOrder(doctrineId: DoctrineId, panel: HTMLElement) {
+  const buttons = panel.querySelectorAll<HTMLButtonElement>('button');
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+
+  try {
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ doctrineId }),
+    });
+    const body: OrderResponse | { message?: string } = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      appendText(
+        panel,
+        'p',
+        'game-state-screen__body',
+        'message' in body && body.message ? body.message : 'Doctrine order failed.',
+      );
+      return;
+    }
+
+    await loadExpandedState();
+  } catch {
+    appendText(panel, 'p', 'game-state-screen__body', 'Doctrine order failed.');
+  } finally {
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
+function appendBattleMeta(panel: HTMLElement, bootstrap: BootstrapResponse) {
+  const territory = bootstrap.battle?.activeTerritory;
+  if (!territory) return;
+
+  appendText(
+    panel,
+    'p',
+    'game-state-screen__meta',
+    `Active territory: ${territory.name} / owner: ${territory.owner}`,
+  );
 }
 
 function renderCountdownTimer(target: HTMLElement, bootstrap: BootstrapResponse) {
@@ -113,6 +190,23 @@ function renderStateScreen(bootstrap: BootstrapResponse) {
       'game-state-screen__body',
       bootstrap.battle?.resultSummary ?? 'The AI has posted the result of the daily battle.',
     );
+    if (bootstrap.battle?.result) {
+      const result = bootstrap.battle.result;
+      appendText(
+        panel,
+        'p',
+        'game-state-screen__meta',
+        `Green ${result.doctrines.green} / Blue ${result.doctrines.blue} / AI ${result.doctrines.ai}`,
+      );
+      if (bootstrap.user.rewards) {
+        appendText(
+          panel,
+          'p',
+          'game-state-screen__meta',
+          `Rewards: ${bootstrap.user.rewards.xp} XP, ${bootstrap.user.rewards.rank}`,
+        );
+      }
+    }
 
     if (bootstrap.battle) {
       const link = document.createElement('a');
@@ -126,8 +220,35 @@ function renderStateScreen(bootstrap: BootstrapResponse) {
   } else if (bootstrap.view === 'countdown') {
     appendText(panel, 'h1', 'game-state-screen__title', 'Daily battle is live');
     const timer = appendText(panel, 'p', 'game-state-screen__timer', '');
-    appendText(panel, 'p', 'game-state-screen__body', 'AI result posts at 21:00 ET.');
-    panel.append(createActionButton('Enter game'));
+    appendBattleMeta(panel, bootstrap);
+    if (bootstrap.user.order) {
+      appendText(
+        panel,
+        'p',
+        'game-state-screen__body',
+        `Order locked: ${bootstrap.user.order.army.toUpperCase()} / ${bootstrap.user.order.doctrineId}. AI result posts at 21:00 ET.`,
+      );
+      if (bootstrap.user.spyOffer?.offered) {
+        appendText(
+          panel,
+          'p',
+          'game-state-screen__meta',
+          bootstrap.user.spyOffer.accepted
+            ? `Spy objective accepted: ${bootstrap.user.spyOffer.objective ?? 'classified'}`
+            : 'Spy offer available in this battle.',
+        );
+      }
+    } else {
+      appendText(panel, 'p', 'game-state-screen__body', 'Choose one hidden doctrine. One order per daily battle.');
+      const doctrineGrid = document.createElement('div');
+      doctrineGrid.className = 'game-state-screen__doctrines';
+      for (const doctrineId of DOCTRINE_IDS) {
+        doctrineGrid.append(createDoctrineButton(doctrineId, (selectedDoctrineId) => {
+          void submitDoctrineOrder(selectedDoctrineId, panel);
+        }));
+      }
+      panel.append(doctrineGrid);
+    }
     renderCountdownTimer(timer, bootstrap);
   } else {
     appendText(panel, 'h1', 'game-state-screen__title', 'Join humanity');
@@ -163,4 +284,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await loadExpandedState();
+});
+
+window.addEventListener('humans-vs-ai:player-joined', () => {
+  stopPhaserGame();
+  void loadExpandedState();
 });

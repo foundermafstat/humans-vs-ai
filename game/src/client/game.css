@@ -68,6 +68,54 @@ body {
   text-shadow: 0 2px 0 #000000;
 }
 
+.game-state-screen__meta {
+  color: #d9c59d;
+  font-size: 20px;
+  line-height: 1.05;
+  text-align: center;
+  text-shadow: 0 2px 0 #000000;
+}
+
+.game-state-screen__doctrines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.game-state-screen__doctrine {
+  min-height: 82px;
+  border: 2px solid rgba(242, 195, 91, 0.62);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(34, 27, 19, 0.94);
+  color: #f6dda0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.game-state-screen__doctrine strong,
+.game-state-screen__doctrine span {
+  display: block;
+}
+
+.game-state-screen__doctrine strong {
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.game-state-screen__doctrine span {
+  margin-top: 5px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.game-state-screen__doctrine:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .game-state-screen__button {
   align-self: center;
   min-width: 160px;
@@ -88,4 +136,23 @@ body {
 .game-state-screen__button:active {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #6d3a18;
+}
+
+@media (max-width: 520px) {
+  .game-state-screen__panel {
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .game-state-screen__title {
+    font-size: 36px;
+  }
+
+  .game-state-screen__timer {
+    font-size: 42px;
+  }
+
+  .game-state-screen__doctrines {
+    grid-template-columns: 1fr;
+  }
 }

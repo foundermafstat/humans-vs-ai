@@ -5,13 +5,25 @@ import type {
   BootstrapBattle,
   BootstrapResponse,
   BattleStatus,
+  BattleResultView,
   DevThreadTarget,
   DevWarRoomState,
+  DoctrineId,
+  DoctrineOrder,
   DivisionCommentAnalysisResponse,
   DivisionTarget,
+  OrderResponse,
+  PlayerBattleState,
   PlayerJoinResponse,
+  RewardSummary,
+  SpyResponse,
+  SpyResponseRequest,
+  TerritoryView,
 } from '../../shared/api';
 import { DOCTRINE_LIST } from './doctrines';
+import { aggregateCommentSignals, createEmptyCommentSignal } from './commentSignals';
+import { resolveBattle } from './resolver';
+import { getTerritoryById, selectActiveTerritory } from './territories';
 
 type NewYorkParts = {
   year: number;
@@ -29,10 +41,30 @@ type DailyBattle = {
   postId: string;
   postPermalink: string;
   resolvesAt: string;
+  activeTerritoryId?: string;
   createdAt: string;
   updatedAt: string;
+  result?: BattleResultView;
   resultSummary?: string;
   resultCommentId?: string;
+};
+
+type StoredPlayer = {
+  redditUserId: string;
+  army: ArmyColor;
+  joinedAt: string;
+  updatedAt: string;
+  rewards?: RewardSummary;
+};
+
+type StoredSpyOffer = {
+  battleId: string;
+  userId: string;
+  offered: true;
+  accepted?: boolean;
+  objective: string;
+  targetDoctrineHint: DoctrineId;
+  updatedAt: string;
 };
 
 type DailyTaskResult = {
@@ -84,8 +116,10 @@ type OpenAIResponse = {
 const NEW_YORK_TIME_ZONE = 'America/New_York';
 const CURRENT_BATTLE_KEY = 'app:current_battle';
 const PLAYERS_KEY = 'app:players';
+const TERRITORIES_KEY = 'app:territories';
 const DAILY_POST_TITLE_PREFIX = 'Humans vs AI Daily Battle';
 const OPENAI_API_KEY_SETTING = 'openai_api_key';
+const DEMO_RESOLVE_MINUTES_SETTING = 'demo_resolve_minutes';
 const OPENAI_REPORT_MODEL = 'gpt-5.4-nano';
 const MAX_BRANCH_COMMENTS = 50;
 const MAX_PROMPT_COMMENTS = 25;
@@ -170,6 +204,14 @@ function getBattleKey(battleId: string) {
 
 function getBattleByPostKey(postId: string) {
   return `app:battle_by_post:${postId}`;
+}
+
+function getOrdersKey(battleId: string) {
+  return `app:orders:${battleId}`;
+}
+
+function getSpyOffersKey(battleId: string) {
+  return `app:spy_offers:${battleId}`;
 }
 
 function getWarRoomKey(postId: string) {
@@ -320,6 +362,16 @@ function getNextResolveAt(now: Date) {
   });
 }
 
+async function getResolveAt(now: Date) {
+  const rawDemoMinutes = await settings.get<string>(DEMO_RESOLVE_MINUTES_SETTING);
+  const demoMinutes = rawDemoMinutes ? Number(rawDemoMinutes) : 0;
+  if (Number.isFinite(demoMinutes) && demoMinutes > 0 && demoMinutes <= 180) {
+    return new Date(now.getTime() + demoMinutes * 60_000);
+  }
+
+  return getNextResolveAt(now);
+}
+
 function isDailyBattle(value: unknown): value is DailyBattle {
   if (!isRecord(value)) return false;
 
@@ -327,6 +379,9 @@ function isDailyBattle(value: unknown): value is DailyBattle {
     value.resultSummary === undefined || typeof value.resultSummary === 'string';
   const resultCommentIdOk =
     value.resultCommentId === undefined || typeof value.resultCommentId === 'string';
+  const activeTerritoryOk =
+    value.activeTerritoryId === undefined || typeof value.activeTerritoryId === 'string';
+  const resultOk = value.result === undefined || isRecord(value.result);
 
   return (
     typeof value.id === 'string' &&
@@ -335,11 +390,76 @@ function isDailyBattle(value: unknown): value is DailyBattle {
     typeof value.postId === 'string' &&
     typeof value.postPermalink === 'string' &&
     typeof value.resolvesAt === 'string' &&
+    activeTerritoryOk &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string' &&
+    resultOk &&
     resultSummaryOk &&
     resultCommentIdOk
   );
+}
+
+function isStoredPlayer(value: unknown): value is StoredPlayer {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.redditUserId === 'string' &&
+    (value.army === 'green' || value.army === 'blue') &&
+    typeof value.joinedAt === 'string' &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+function parseStoredPlayer(rawPlayer: string | undefined) {
+  if (!rawPlayer) return undefined;
+
+  const parsed: unknown = JSON.parse(rawPlayer);
+  if (!isStoredPlayer(parsed)) return undefined;
+
+  return parsed;
+}
+
+function isDoctrineOrder(value: unknown): value is DoctrineOrder {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.battleId === 'string' &&
+    (value.army === 'green' || value.army === 'blue') &&
+    typeof value.doctrineId === 'string' &&
+    typeof value.submittedAt === 'string'
+  );
+}
+
+function parseDoctrineOrder(rawOrder: string | undefined) {
+  if (!rawOrder) return undefined;
+
+  const parsed: unknown = JSON.parse(rawOrder);
+  if (!isDoctrineOrder(parsed)) return undefined;
+
+  return parsed;
+}
+
+function isStoredSpyOffer(value: unknown): value is StoredSpyOffer {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.battleId === 'string' &&
+    typeof value.userId === 'string' &&
+    value.offered === true &&
+    (value.accepted === undefined || typeof value.accepted === 'boolean') &&
+    typeof value.objective === 'string' &&
+    typeof value.targetDoctrineHint === 'string' &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+function parseStoredSpyOffer(rawOffer: string | undefined) {
+  if (!rawOffer) return undefined;
+
+  const parsed: unknown = JSON.parse(rawOffer);
+  if (!isStoredSpyOffer(parsed)) return undefined;
+
+  return parsed;
 }
 
 function isWarRoomState(value: unknown): value is DevWarRoomState {
@@ -381,6 +501,10 @@ async function getCurrentBattle() {
   return await getBattleById(battleId);
 }
 
+async function getCurrentResolvableBattle() {
+  return (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+}
+
 async function getWarRoom(postId: string) {
   const rawState = await redis.get(getWarRoomKey(postId));
   if (!rawState) return undefined;
@@ -399,6 +523,125 @@ async function getBattleForCurrentPost() {
   if (!battleId) return undefined;
 
   return await getBattleById(battleId);
+}
+
+async function getPlayer(userId: string | undefined) {
+  if (!userId) return undefined;
+
+  return parseStoredPlayer(await redis.hGet(PLAYERS_KEY, userId));
+}
+
+async function getPlayers() {
+  const rawPlayers = await redis.hGetAll(PLAYERS_KEY);
+  const players: StoredPlayer[] = [];
+
+  for (const rawPlayer of Object.values(rawPlayers)) {
+    const player = parseStoredPlayer(rawPlayer);
+    if (player) players.push(player);
+  }
+
+  return players;
+}
+
+async function getPlayerOrder(battleId: string, userId: string | undefined) {
+  if (!userId) return undefined;
+
+  return parseDoctrineOrder(await redis.hGet(getOrdersKey(battleId), userId));
+}
+
+async function getBattleOrders(battleId: string) {
+  const rawOrders = await redis.hGetAll(getOrdersKey(battleId));
+  const orders: DoctrineOrder[] = [];
+
+  for (const rawOrder of Object.values(rawOrders)) {
+    const order = parseDoctrineOrder(rawOrder);
+    if (order) orders.push(order);
+  }
+
+  return orders;
+}
+
+function parseTerritory(rawTerritory: string | undefined) {
+  if (!rawTerritory) return undefined;
+
+  const parsed: unknown = JSON.parse(rawTerritory);
+  if (!isRecord(parsed)) return undefined;
+  if (
+    typeof parsed.id !== 'string' ||
+    typeof parsed.name !== 'string' ||
+    typeof parsed.x !== 'number' ||
+    typeof parsed.y !== 'number'
+  ) {
+    return undefined;
+  }
+
+  return parsed as TerritoryView;
+}
+
+async function getStoredTerritory(id: string | undefined) {
+  const fallback = getTerritoryById(id);
+  const stored = parseTerritory(await redis.hGet(TERRITORIES_KEY, fallback.id));
+
+  return stored ?? fallback;
+}
+
+async function saveTerritory(territory: TerritoryView) {
+  await redis.hSet(TERRITORIES_KEY, {
+    [territory.id]: JSON.stringify(territory),
+  });
+}
+
+async function getSpyOffer(battleId: string, userId: string | undefined) {
+  if (!userId) return undefined;
+
+  return parseStoredSpyOffer(await redis.hGet(getSpyOffersKey(battleId), userId));
+}
+
+async function getAcceptedSpyInfluence(battleId: string, players: readonly StoredPlayer[]) {
+  const rawOffers = await redis.hGetAll(getSpyOffersKey(battleId));
+  const playerByUserId = new Map(players.map((player) => [player.redditUserId, player]));
+  const influence: Record<ArmyColor, number> = {
+    green: 0,
+    blue: 0,
+  };
+
+  for (const rawOffer of Object.values(rawOffers)) {
+    const offer = parseStoredSpyOffer(rawOffer);
+    if (!offer?.accepted) continue;
+
+    const player = playerByUserId.get(offer.userId);
+    if (!player) continue;
+
+    influence[player.army] = Math.max(-12, influence[player.army] - 6);
+  }
+
+  return influence;
+}
+
+async function getOrCreateSpyOffer(battle: DailyBattle, userId: string | undefined) {
+  if (!userId || battle.status === 'resolved') return undefined;
+
+  const existing = await getSpyOffer(battle.id, userId);
+  if (existing) return existing;
+  if (getOutcomeIndex(`${battle.id}:${userId}:spy`) % 4 !== 0) return undefined;
+
+  const doctrine = DOCTRINE_LIST[getOutcomeIndex(`${battle.id}:${userId}:hint`) % DOCTRINE_LIST.length];
+  if (!doctrine) return undefined;
+
+  const offer: StoredSpyOffer = {
+    battleId: battle.id,
+    userId,
+    offered: true,
+    objective: `Create enough public noise to hide ${doctrine.name}.`,
+    targetDoctrineHint: doctrine.id,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await redis.hSet(getSpyOffersKey(battle.id), {
+    [userId]: JSON.stringify(offer),
+  });
+
+  return offer;
 }
 
 async function saveBattle(battle: DailyBattle) {
@@ -427,6 +670,27 @@ function createDeterministicResult(battle: DailyBattle) {
   return {
     resultSummary: `${outcome.winner}. ${outcome.summary}`,
     aiComment: outcome.aiComment,
+  };
+}
+
+function createPlayerBattleState(input: {
+  player?: StoredPlayer;
+  order?: DoctrineOrder;
+  spyOffer?: StoredSpyOffer;
+}): PlayerBattleState {
+  return {
+    exists: Boolean(input.player),
+    army: input.player?.army,
+    order: input.order,
+    rewards: input.player?.rewards,
+    spyOffer: input.spyOffer
+      ? {
+        offered: true,
+        accepted: input.spyOffer.accepted,
+        objective: input.spyOffer.objective,
+        targetDoctrineHint: input.spyOffer.targetDoctrineHint,
+      }
+      : undefined,
   };
 }
 
@@ -679,9 +943,10 @@ async function createDailyWarRoom(postId: string, postPermalink: string) {
   return warRoom;
 }
 
-function createBootstrapBattle(battle: DailyBattle, now: Date): BootstrapBattle {
+async function createBootstrapBattle(battle: DailyBattle, now: Date): Promise<BootstrapBattle> {
   const resolvesAtMs = new Date(battle.resolvesAt).getTime();
   const secondsUntilResolve = Math.max(0, Math.ceil((resolvesAtMs - now.getTime()) / 1_000));
+  const activeTerritory = battle.result?.activeTerritoryAfter ?? await getStoredTerritory(battle.activeTerritoryId);
   const bootstrapBattle: BootstrapBattle = {
     id: battle.id,
     battleDate: battle.battleDate,
@@ -690,8 +955,10 @@ function createBootstrapBattle(battle: DailyBattle, now: Date): BootstrapBattle 
     postPermalink: battle.postPermalink,
     resolvesAt: battle.resolvesAt,
     secondsUntilResolve,
+    activeTerritory,
   };
 
+  if (battle.result) bootstrapBattle.result = battle.result;
   if (battle.resultSummary) bootstrapBattle.resultSummary = battle.resultSummary;
 
   return bootstrapBattle;
@@ -706,15 +973,15 @@ export function isNewYorkWallTime(now: Date, hour: number, minute: number) {
 export async function getBootstrapResponse(): Promise<BootstrapResponse> {
   const now = new Date();
   const userId = context.userId;
-  const userExists = userId ? Boolean(await redis.hGet(PLAYERS_KEY, userId)) : false;
-  const battle = (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+  const player = await getPlayer(userId);
+  const battle = await getCurrentResolvableBattle();
+  const order = battle ? await getPlayerOrder(battle.id, userId) : undefined;
+  const spyOffer = battle ? await getOrCreateSpyOffer(battle, userId) : undefined;
   const response: BootstrapResponse = {
     type: 'bootstrap',
     serverNow: now.toISOString(),
     view: 'promo',
-    user: {
-      exists: userExists,
-    },
+    user: createPlayerBattleState({ player, order, spyOffer }),
   };
 
   if (!battle) return response;
@@ -729,14 +996,14 @@ export async function getBootstrapResponse(): Promise<BootstrapResponse> {
     };
   }
 
-  response.battle = createBootstrapBattle(displayBattle, now);
+  response.battle = await createBootstrapBattle(displayBattle, now);
 
   if (isResolved) {
     response.view = 'summary';
     return response;
   }
 
-  response.view = userExists ? 'countdown' : 'promo';
+  response.view = player ? 'countdown' : 'promo';
   return response;
 }
 
@@ -746,19 +1013,17 @@ export async function joinCurrentPlayer(army: ArmyColor): Promise<PlayerJoinResp
   if (!userId) throw new Error('Reddit user id is required');
 
   const now = new Date().toISOString();
-  const existing = await redis.hGet(PLAYERS_KEY, userId);
-  const player = {
+  const existing = parseStoredPlayer(await redis.hGet(PLAYERS_KEY, userId));
+  const player: StoredPlayer = {
     redditUserId: userId,
     army,
     joinedAt: now,
     updatedAt: now,
+    rewards: existing?.rewards,
   };
 
   if (existing) {
-    const parsed: unknown = JSON.parse(existing);
-    if (isRecord(parsed) && typeof parsed.joinedAt === 'string') {
-      player.joinedAt = parsed.joinedAt;
-    }
+    player.joinedAt = existing.joinedAt;
   }
 
   await redis.hSet(PLAYERS_KEY, {
@@ -773,9 +1038,93 @@ export async function joinCurrentPlayer(army: ArmyColor): Promise<PlayerJoinResp
   };
 }
 
+export async function submitDoctrineOrder(doctrineId: DoctrineId): Promise<OrderResponse> {
+  const { userId } = context;
+  if (!userId) throw new Error('Reddit user id is required');
+
+  const battle = await getCurrentResolvableBattle();
+  if (!battle) throw new Error('No current battle found');
+  if (battle.status === 'resolved') throw new Error('Battle is already resolved');
+
+  const player = await getPlayer(userId);
+  if (!player) throw new Error('Join an army before submitting an order');
+
+  const existingOrder = await getPlayerOrder(battle.id, userId);
+  if (existingOrder) {
+    return {
+      type: 'order',
+      order: existingOrder,
+      player: createPlayerBattleState({
+        player,
+        order: existingOrder,
+        spyOffer: await getSpyOffer(battle.id, userId),
+      }),
+    };
+  }
+
+  const order: DoctrineOrder = {
+    battleId: battle.id,
+    army: player.army,
+    doctrineId,
+    submittedAt: new Date().toISOString(),
+  };
+
+  await redis.hSet(getOrdersKey(battle.id), {
+    [userId]: JSON.stringify(order),
+  });
+
+  return {
+    type: 'order',
+    order,
+    player: createPlayerBattleState({
+      player,
+      order,
+      spyOffer: await getSpyOffer(battle.id, userId),
+    }),
+  };
+}
+
+export async function respondToSpyOffer(input: SpyResponseRequest): Promise<SpyResponse> {
+  const { userId } = context;
+  if (!userId) throw new Error('Reddit user id is required');
+
+  const battle = await getCurrentResolvableBattle();
+  if (!battle) throw new Error('No current battle found');
+
+  const offer = await getOrCreateSpyOffer(battle, userId);
+  if (!offer) {
+    return {
+      type: 'spy-response',
+      spyOffer: {
+        offered: false,
+      },
+    };
+  }
+
+  const updatedOffer: StoredSpyOffer = {
+    ...offer,
+    accepted: input.accept,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await redis.hSet(getSpyOffersKey(battle.id), {
+    [userId]: JSON.stringify(updatedOffer),
+  });
+
+  return {
+    type: 'spy-response',
+    spyOffer: {
+      offered: true,
+      accepted: updatedOffer.accepted,
+      objective: updatedOffer.objective,
+      targetDoctrineHint: updatedOffer.targetDoctrineHint,
+    },
+  };
+}
+
 export async function postAiStatusReport(): Promise<AiReportResponse> {
   const now = new Date();
-  const battle = (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+  const battle = await getCurrentResolvableBattle();
   if (!battle) throw new Error('No current battle found');
 
   const warRoom = await getWarRoom(battle.postId);
@@ -808,7 +1157,7 @@ export async function postAiStatusReport(): Promise<AiReportResponse> {
 export async function postDivisionCommentAnalysis(
   target: DivisionTarget,
 ): Promise<DivisionCommentAnalysisResponse> {
-  const battle = (await getBattleForCurrentPost()) ?? (await getCurrentBattle());
+  const battle = await getCurrentResolvableBattle();
   if (!battle) throw new Error('No current battle found');
 
   const warRoom = await getWarRoom(battle.postId);
@@ -843,7 +1192,7 @@ export async function postDivisionCommentAnalysis(
 }
 
 export async function createNextDailyBattle(now = new Date()): Promise<DailyTaskResult> {
-  const resolvesAt = getNextResolveAt(now);
+  const resolvesAt = await getResolveAt(now);
   const battleDate = formatYmd(getNewYorkParts(resolvesAt));
   const battleId = `battle:${battleDate}`;
   const existing = await getBattleById(battleId);
@@ -878,6 +1227,7 @@ export async function createNextDailyBattle(now = new Date()): Promise<DailyTask
     postId: post.id,
     postPermalink,
     resolvesAt: resolvesAt.toISOString(),
+    activeTerritoryId: selectActiveTerritory(battleId).id,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
@@ -938,20 +1288,63 @@ export async function resolveCurrentDailyBattle(now = new Date()): Promise<Daily
     };
   }
 
-  const result = createDeterministicResult(battle);
+  const activeTerritory = await getStoredTerritory(battle.activeTerritoryId);
+  const [orders, players, warRoom] = await Promise.all([
+    getBattleOrders(battle.id),
+    getPlayers(),
+    getWarRoom(battle.postId),
+  ]);
+  const commentSignals = warRoom
+    ? {
+      green: aggregateCommentSignals(
+        'green',
+        await loadBranchCommentSignalInput(battle, warRoom, 'green'),
+        now.toISOString(),
+      ),
+      blue: aggregateCommentSignals(
+        'blue',
+        await loadBranchCommentSignalInput(battle, warRoom, 'blue'),
+        now.toISOString(),
+      ),
+    }
+    : {
+      green: createEmptyCommentSignal('green', now.toISOString()),
+      blue: createEmptyCommentSignal('blue', now.toISOString()),
+    };
+  const previousRewards = {
+    green: players.find((player) => player.army === 'green')?.rewards,
+    blue: players.find((player) => player.army === 'blue')?.rewards,
+  };
+  const spyInfluence = await getAcceptedSpyInfluence(battle.id, players);
+  const result = resolveBattle({
+    battleId: battle.id,
+    battleDate: battle.battleDate,
+    activeTerritory,
+    orders,
+    commentSignals,
+    spyInfluence,
+    previousRewards,
+    seed: `${battle.id}:${battle.battleDate}`,
+  });
   const comment = await withRedditRateLimitRetry(() => reddit.submitComment({
     id: getRedditCommentTargetId(battle.postId),
-    text: result.aiComment,
+    text: `AI RESULT // ${result.reportText}`,
     runAs: 'APP',
   }));
   const resolvedBattle: DailyBattle = {
     ...battle,
     status: 'resolved',
-    resultSummary: result.resultSummary,
+    result,
+    activeTerritoryId: result.activeTerritoryAfter.id,
+    resultSummary: result.reportText,
     resultCommentId: comment.id,
     updatedAt: now.toISOString(),
   };
 
+  await Promise.all([
+    savePlayerRewards(players, result),
+    saveTerritory(result.activeTerritoryAfter),
+  ]);
   await saveBattle(resolvedBattle);
 
   return {
@@ -959,4 +1352,45 @@ export async function resolveCurrentDailyBattle(now = new Date()): Promise<Daily
     message: `Resolved ${battle.id}.`,
     battle: resolvedBattle,
   };
+}
+
+async function loadBranchCommentSignalInput(
+  battle: DailyBattle,
+  warRoom: DevWarRoomState,
+  target: DivisionTarget,
+) {
+  const branchComments = await reddit.getComments({
+    postId: getRedditPostId(battle.postId),
+    commentId: getRedditCommentId(warRoom.threadIds[target]),
+    depth: MAX_COMMENT_TREE_DEPTH,
+    limit: MAX_BRANCH_COMMENTS,
+    pageSize: MAX_BRANCH_COMMENTS,
+    sort: 'new',
+  }).all();
+  const comments = await collectDivisionBranchComments(branchComments);
+
+  return comments.map((comment) => ({
+    branch: target,
+    body: comment.body,
+    score: comment.score,
+  }));
+}
+
+async function savePlayerRewards(players: readonly StoredPlayer[], result: BattleResultView) {
+  const updates: Record<string, string> = {};
+
+  for (const player of players) {
+    const reward = result.rewards[player.army];
+    if (!reward) continue;
+
+    updates[player.redditUserId] = JSON.stringify({
+      ...player,
+      rewards: reward,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await redis.hSet(PLAYERS_KEY, updates);
+  }
 }

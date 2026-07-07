@@ -13,6 +13,132 @@ export type ArmyColor = "green" | "blue";
 
 export type DivisionTarget = "green" | "blue";
 
+export type BattleSide = ArmyColor | "ai";
+
+export type TerritoryOwner = BattleSide | "contested";
+
+export type BattleWinner = BattleSide | "humanity" | "contested";
+
+export const DOCTRINE_IDS = [
+  "STRIKE",
+  "HACK",
+  "VIRUS",
+  "PHANTOM",
+  "SHIELD",
+  "OVERLOAD",
+  "TRAP",
+] as const;
+
+export type DoctrineId = (typeof DOCTRINE_IDS)[number];
+
+export const MVP_GAME_LOOP_STEPS = [
+  "daily-battle",
+  "join-army",
+  "choose-hidden-doctrine",
+  "war-room-comments",
+  "comment-signal-aggregation",
+  "ai-awareness-counter-pick",
+  "spy-influence",
+  "doctrine-based-resolution",
+  "territory-and-progression-update",
+  "battle-report-and-rewards",
+] as const;
+
+export type MvpGameLoopStep = (typeof MVP_GAME_LOOP_STEPS)[number];
+
+export type DoctrineOrder = {
+  battleId: string;
+  army: ArmyColor;
+  doctrineId: DoctrineId;
+  submittedAt: string;
+};
+
+export type OrderRequest = {
+  doctrineId: DoctrineId;
+};
+
+export type PlayerBattleState = {
+  exists: boolean;
+  army?: ArmyColor;
+  order?: DoctrineOrder;
+  spyOffer?: SpyOfferView;
+  rewards?: RewardSummary;
+};
+
+export type OrderResponse = {
+  type: "order";
+  order: DoctrineOrder;
+  player: PlayerBattleState;
+};
+
+export type SpyResponseRequest = {
+  accept: boolean;
+};
+
+export type SpyOfferView = {
+  offered: boolean;
+  accepted?: boolean;
+  objective?: string;
+  targetDoctrineHint?: DoctrineId;
+};
+
+export type SpyResponse = {
+  type: "spy-response";
+  spyOffer: SpyOfferView;
+};
+
+export type TerritoryView = {
+  id: string;
+  name: string;
+  owner: TerritoryOwner;
+  x: number;
+  y: number;
+};
+
+export type CommentSignalView = {
+  branch: DivisionTarget;
+  topDoctrineId?: DoctrineId;
+  doctrineMentions: Partial<Record<DoctrineId, number>>;
+  noiseScore: number;
+  deceptionScore: number;
+  scoreAggregate: number;
+  updatedAt: string;
+};
+
+export type RewardSummary = {
+  xp: number;
+  rank: string;
+  medals: readonly string[];
+  streak: number;
+};
+
+export type BattleScoreBreakdown = {
+  doctrineScore: number;
+  orderParticipationScore: number;
+  commentSignalScore: number;
+  aiAwarenessModifier: number;
+  spyScore: number;
+  momentumScore: number;
+  total: number;
+};
+
+export type BattleResultView = {
+  winner: BattleWinner;
+  activeTerritoryBefore: TerritoryView;
+  activeTerritoryAfter: TerritoryView;
+  doctrines: {
+    green: DoctrineId;
+    blue: DoctrineId;
+    ai: DoctrineId;
+  };
+  scores: Record<BattleSide, BattleScoreBreakdown>;
+  commentSignals: Record<DivisionTarget, CommentSignalView>;
+  aiAwareness: Record<DivisionTarget, number>;
+  spyInfluence: Record<DivisionTarget, number>;
+  rewards: Partial<Record<ArmyColor, RewardSummary>>;
+  reportText: string;
+};
+
 export type BootstrapBattle = {
   id: string;
   battleDate: string;
@@ -21,6 +147,8 @@ export type BootstrapBattle = {
   postPermalink: string;
   resolvesAt: string;
   secondsUntilResolve: number;
+  activeTerritory?: TerritoryView;
+  result?: BattleResultView;
   resultSummary?: string;
 };
 
@@ -28,9 +156,7 @@ export type BootstrapResponse = {
   type: "bootstrap";
   serverNow: string;
   view: BattleView;
-  user: {
-    exists: boolean;
-  };
+  user: PlayerBattleState;
   battle?: BootstrapBattle;
 };
 

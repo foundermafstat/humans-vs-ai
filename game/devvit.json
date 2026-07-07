@@ -31,15 +31,15 @@
   "menu": {
     "items": [
       {
-        "label": "Create a new post",
-        "description": "humans-vs-ai",
+        "label": "Create manual Humans vs AI post",
+        "description": "Developer-only manual post creation",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
       },
       {
-        "label": "Example form",
-        "description": "Show a simple form",
+        "label": "Dev example form",
+        "description": "Developer-only template form",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/example-form"
@@ -79,6 +79,10 @@
         "type": "string",
         "label": "OpenAI API Key",
         "isSecret": true
+      },
+      "demo_resolve_minutes": {
+        "type": "string",
+        "label": "Demo resolve minutes"
       }
     }
   },

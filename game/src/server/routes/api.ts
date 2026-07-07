@@ -13,14 +13,19 @@ import type {
   DivisionTarget,
   IncrementResponse,
   InitResponse,
+  OrderResponse,
   PlayerJoinResponse,
+  SpyResponse,
 } from '../../shared/api';
 import { DEV_GREEN_PROFILE, DEV_USER_COMMENT_TEXT } from '../../shared/api';
+import { normalizeDoctrineId } from '../core/doctrines';
 import {
   getBootstrapResponse,
   joinCurrentPlayer,
   postAiStatusReport,
   postDivisionCommentAnalysis,
+  respondToSpyOffer,
+  submitDoctrineOrder,
 } from '../core/dailyCycle';
 
 type ErrorResponse = {
@@ -292,6 +297,50 @@ api.post('/player/join', async (c) => {
   }
 });
 
+api.post('/orders', async (c) => {
+  try {
+    const body: { doctrineId?: unknown } = await c.req.json().catch(() => ({}));
+    const doctrineId = normalizeDoctrineId(body.doctrineId);
+    if (!doctrineId) {
+      return c.json<ErrorResponse>(
+        {
+          status: 'error',
+          message: 'doctrineId must be one of STRIKE, HACK, VIRUS, PHANTOM, SHIELD, OVERLOAD, TRAP',
+        },
+        400
+      );
+    }
+
+    return c.json<OrderResponse>(await submitDoctrineOrder(doctrineId));
+  } catch (error) {
+    console.error(`API Order Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to submit doctrine order',
+      },
+      400
+    );
+  }
+});
+
+api.post('/spy/respond', async (c) => {
+  try {
+    const body: { accept?: unknown } = await c.req.json().catch(() => ({}));
+
+    return c.json<SpyResponse>(await respondToSpyOffer({ accept: body.accept === true }));
+  } catch (error) {
+    console.error(`API Spy Response Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to update spy offer',
+      },
+      400
+    );
+  }
+});
+
 api.post('/ai/test-message', async (c) => {
   try {
     return c.json<AiReportResponse>(await postAiStatusReport());
@@ -333,6 +382,7 @@ api.post('/ai/comments-analysis', async (c) => {
   }
 });
 
+// Dev-only template counter endpoint retained for local smoke checks.
 api.post('/increment', async (c) => {
   const { postId } = context;
   if (!postId) {
@@ -353,6 +403,7 @@ api.post('/increment', async (c) => {
   });
 });
 
+// Dev-only template counter endpoint retained for local smoke checks.
 api.post('/decrement', async (c) => {
   const { postId } = context;
   if (!postId) {
