@@ -22,6 +22,11 @@ import type {
 } from '../../shared/api';
 import { DOCTRINE_LIST } from './doctrines';
 import { aggregateCommentSignals, createEmptyCommentSignal } from './commentSignals';
+import {
+  createPlayerFlair,
+  normalizeRewardSummary,
+  type PlayerFlairStatus,
+} from './playerProgression';
 import { resolveBattle } from './resolver';
 import { getTerritoryById, selectActiveTerritory } from './territories';
 
@@ -51,6 +56,7 @@ type DailyBattle = {
 
 type StoredPlayer = {
   redditUserId: string;
+  redditUsername?: string;
   army: ArmyColor;
   joinedAt: string;
   updatedAt: string;
@@ -401,9 +407,12 @@ function isDailyBattle(value: unknown): value is DailyBattle {
 
 function isStoredPlayer(value: unknown): value is StoredPlayer {
   if (!isRecord(value)) return false;
+  const redditUsernameOk =
+    value.redditUsername === undefined || typeof value.redditUsername === 'string';
 
   return (
     typeof value.redditUserId === 'string' &&
+    redditUsernameOk &&
     (value.army === 'green' || value.army === 'blue') &&
     typeof value.joinedAt === 'string' &&
     typeof value.updatedAt === 'string'
@@ -529,6 +538,40 @@ async function getPlayer(userId: string | undefined) {
   if (!userId) return undefined;
 
   return parseStoredPlayer(await redis.hGet(PLAYERS_KEY, userId));
+}
+
+function getSubredditName() {
+  return context.subredditName ?? 'humans_vs_ai_dev';
+}
+
+async function syncPlayerFlair(player: StoredPlayer, status: PlayerFlairStatus) {
+  const username = player.redditUsername;
+  if (!username) return false;
+
+  const flair = createPlayerFlair({
+    army: player.army,
+    rewards: player.rewards,
+    status,
+  });
+
+  await withRedditRateLimitRetry(() => reddit.setUserFlair({
+    subredditName: getSubredditName(),
+    username,
+    text: flair.text,
+    textColor: flair.textColor,
+    backgroundColor: flair.backgroundColor,
+  }));
+
+  return true;
+}
+
+async function syncPlayerFlairSafely(player: StoredPlayer, status: PlayerFlairStatus) {
+  try {
+    return await syncPlayerFlair(player, status);
+  } catch (error) {
+    console.error(`Failed to sync player flair for ${player.redditUserId}: ${error}`);
+    return false;
+  }
 }
 
 async function getPlayers() {
@@ -682,7 +725,7 @@ function createPlayerBattleState(input: {
     exists: Boolean(input.player),
     army: input.player?.army,
     order: input.order,
-    rewards: input.player?.rewards,
+    rewards: input.player ? normalizeRewardSummary(input.player.rewards) : undefined,
     spyOffer: input.spyOffer
       ? {
         offered: true,
@@ -1013,13 +1056,15 @@ export async function joinCurrentPlayer(army: ArmyColor): Promise<PlayerJoinResp
   if (!userId) throw new Error('Reddit user id is required');
 
   const now = new Date().toISOString();
+  const redditUsername = await reddit.getCurrentUsername();
   const existing = parseStoredPlayer(await redis.hGet(PLAYERS_KEY, userId));
   const player: StoredPlayer = {
     redditUserId: userId,
+    redditUsername: redditUsername ?? existing?.redditUsername,
     army,
     joinedAt: now,
     updatedAt: now,
-    rewards: existing?.rewards,
+    rewards: normalizeRewardSummary(existing?.rewards),
   };
 
   if (existing) {
@@ -1029,6 +1074,7 @@ export async function joinCurrentPlayer(army: ArmyColor): Promise<PlayerJoinResp
   await redis.hSet(PLAYERS_KEY, {
     [userId]: JSON.stringify(player),
   });
+  await syncPlayerFlairSafely(player, 'awaiting-orders');
 
   return {
     type: 'player-join',
@@ -1051,6 +1097,8 @@ export async function submitDoctrineOrder(doctrineId: DoctrineId): Promise<Order
 
   const existingOrder = await getPlayerOrder(battle.id, userId);
   if (existingOrder) {
+    await syncPlayerFlairSafely(player, 'orders-locked');
+
     return {
       type: 'order',
       order: existingOrder,
@@ -1072,6 +1120,7 @@ export async function submitDoctrineOrder(doctrineId: DoctrineId): Promise<Order
   await redis.hSet(getOrdersKey(battle.id), {
     [userId]: JSON.stringify(order),
   });
+  await syncPlayerFlairSafely(player, 'orders-locked');
 
   return {
     type: 'order',
@@ -1082,6 +1131,28 @@ export async function submitDoctrineOrder(doctrineId: DoctrineId): Promise<Order
       spyOffer: await getSpyOffer(battle.id, userId),
     }),
   };
+}
+
+export async function syncCurrentPlayerFlair(status: PlayerFlairStatus = 'standing-by') {
+  const { userId } = context;
+  if (!userId) throw new Error('Reddit user id is required');
+
+  const player = await getPlayer(userId);
+  if (!player) return false;
+
+  const redditUsername = await reddit.getCurrentUsername();
+  const normalizedPlayer: StoredPlayer = {
+    ...player,
+    redditUsername: redditUsername ?? player.redditUsername,
+    rewards: normalizeRewardSummary(player.rewards),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await redis.hSet(PLAYERS_KEY, {
+    [userId]: JSON.stringify(normalizedPlayer),
+  });
+
+  return await syncPlayerFlair(normalizedPlayer, status);
 }
 
 export async function respondToSpyOffer(input: SpyResponseRequest): Promise<SpyResponse> {
@@ -1378,19 +1449,27 @@ async function loadBranchCommentSignalInput(
 
 async function savePlayerRewards(players: readonly StoredPlayer[], result: BattleResultView) {
   const updates: Record<string, string> = {};
+  const updatedPlayers: StoredPlayer[] = [];
 
   for (const player of players) {
     const reward = result.rewards[player.army];
     if (!reward) continue;
 
-    updates[player.redditUserId] = JSON.stringify({
+    const updatedPlayer: StoredPlayer = {
       ...player,
       rewards: reward,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    updates[player.redditUserId] = JSON.stringify(updatedPlayer);
+    updatedPlayers.push(updatedPlayer);
   }
 
   if (Object.keys(updates).length > 0) {
     await redis.hSet(PLAYERS_KEY, updates);
+  }
+
+  for (const player of updatedPlayers) {
+    await syncPlayerFlairSafely(player, 'standing-by');
   }
 }

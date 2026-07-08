@@ -13,6 +13,7 @@ import {
 } from '../../shared/api';
 import { getCommentSignalScore, getAiAwareness } from './commentSignals';
 import { getDoctrineMatchup } from './doctrines';
+import { updateRewardSummary } from './playerProgression';
 import { applyTerritoryWinner } from './territories';
 
 export type ResolveBattleInput = {
@@ -246,21 +247,6 @@ function createRewards(
   return {
     green: updateRewardSummary(previousRewards.green, winner === 'green' || winner === 'humanity'),
     blue: updateRewardSummary(previousRewards.blue, winner === 'blue' || winner === 'humanity'),
-  };
-}
-
-function updateRewardSummary(previous: RewardSummary | undefined, won: boolean): RewardSummary {
-  const previousXp = previous?.xp ?? 0;
-  const xp = previousXp + (won ? 25 : 10);
-  const medals = new Set(previous?.medals ?? []);
-  medals.add('First Deployment');
-  if (won) medals.add('Territory Captured');
-
-  return {
-    xp,
-    rank: xp >= 100 ? 'Signal Captain' : xp >= 50 ? 'War Room Regular' : 'Infantry',
-    medals: Array.from(medals),
-    streak: won ? (previous?.streak ?? 0) + 1 : 0,
   };
 }
 

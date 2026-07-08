@@ -25,6 +25,7 @@ import {
   postAiStatusReport,
   postDivisionCommentAnalysis,
   respondToSpyOffer,
+  syncCurrentPlayerFlair,
   submitDoctrineOrder,
 } from '../core/dailyCycle';
 
@@ -442,34 +443,26 @@ api.get('/dev/state', async (c) => {
 
 api.post('/dev/apply-flair', async (c) => {
   try {
-    const username = await reddit.getCurrentUsername();
-    if (!username) {
+    const applied = await syncCurrentPlayerFlair();
+    if (!applied) {
       return c.json<ErrorResponse>(
         {
           status: 'error',
-          message: 'Current Reddit username is required',
+          message: 'Join an army before applying player flair',
         },
         400
       );
     }
 
-    await reddit.setUserFlair({
-      subredditName: getSubredditName(),
-      username,
-      text: DEV_GREEN_PROFILE.publicFlair,
-      textColor: 'light',
-      backgroundColor: '#178c45',
-    });
-
     return c.json<DevActionResponse>(
-      createDevActionResponse(`Applied Green Tribe flair to u/${username}.`)
+      createDevActionResponse('Applied dynamic player flair from Redis state.')
     );
   } catch (error) {
     console.error(`Error applying dev flair: ${error}`);
     return c.json<ErrorResponse>(
       {
         status: 'error',
-        message: 'Failed to apply Green Tribe flair',
+        message: 'Failed to apply dynamic player flair',
       },
       400
     );
