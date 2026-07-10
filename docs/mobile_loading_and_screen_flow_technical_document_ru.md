@@ -85,6 +85,9 @@ requestExpandedMode(event, 'game')
 | Start button | Запускает expanded `game` entrypoint. |
 | Stats ticker | Бегущая строка внизу. |
 
+Фраза `ranks of humanity` является маркетинговым текстом splash. Канонические игровые звания,
+их slug, описания и custom emoji определены в `game/src/server/core/playerRanks.ts`.
+
 ### Mobile требования
 
 1. Inline splash должен занимать всю область Devvit inline post.
@@ -353,4 +356,3 @@ background.scale = backgroundScale
 3. Google Font ожидание перед стартом Phaser может добавлять задержку до `Boot`; это отдельный UX-риск, но не источник смещенного progress bar.
 4. В текущей реализации нет сохранения выбранной армии/персонажа через backend.
 5. MainMenu и GameOver присутствуют в scene array, но пользователь их сейчас не видит.
-

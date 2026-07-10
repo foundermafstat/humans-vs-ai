@@ -235,12 +235,12 @@ Splash battlefield визуально богатый: армии Green/Blue/AI, 
 
 Отдельный документ `docs/user_flair_interaction_technical_document_ru.md` фиксирует текущий статус:
 
-- есть статический `DEV_GREEN_PROFILE`;
-- есть dev endpoint для применения Green Tribe flair;
-- flair не связан с `joinCurrentPlayer`;
-- Blue flair, динамические ранги, медали и progress не реализованы.
+- канонические 48 званий, slug, описания и emoji определены в `game/src/server/core/playerRanks.ts`;
+- progression выбирает звание из этого списка по XP;
+- daily cycle синхронизирует динамический Green/Blue Reddit flair игрока;
+- статический `DEV_GREEN_PROFILE` остаётся только dev-примером.
 
-Вывод: flair сейчас демонстрирует будущую социальную идентичность, но не является gameplay системой.
+Вывод: звание и армия уже являются server-owned gameplay-состоянием, проецируемым во flair.
 
 ### 3.10. Template leftovers
 
@@ -556,6 +556,8 @@ Acceptance:
 - публичный report не провоцирует травлю конкретного пользователя.
 
 ### Этап 7. Rewards, ranks, flair
+
+Источник 48 рангов для этого этапа: `game/src/server/core/playerRanks.ts`.
 
 **Цель:** закрыть retention loop.
 

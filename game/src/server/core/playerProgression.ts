@@ -1,59 +1,11 @@
 import type { ArmyColor, RewardSummary } from '../../shared/api';
+import { PLAYER_RANKS } from './playerRanks';
+
+export { PLAYER_RANKS } from './playerRanks';
 
 export type PlayerFlairStatus = 'awaiting-orders' | 'orders-locked' | 'standing-by';
 
 const RANK_XP_STEP = 25;
-
-export const PLAYER_RANKS = [
-  'Captcha Casualty',
-  'Prompt Peasant',
-  'Keyboard Militia',
-  'Tin Foil Recruit',
-  'Spreadsheet Survivor',
-  'Copy Paste Cadet',
-  'Algorithm Alarmist',
-  'Ctrl Plus Z Fighter',
-  'Meme Infantry',
-  'Captcha Squire',
-  'Wi Fi Trench Scout',
-  'Prompt Dodger',
-  'AI Panic Intern',
-  'Forum Skirmisher',
-  'Bot Spotting Corporal',
-  'Neural Net Naysayer',
-  'JPEG Resistance Trooper',
-  'Deepfake Detective',
-  'Anti Autocomplete Sergeant',
-  'Spam Folder Veteran',
-  'Doomscroll Lieutenant',
-  'Firewall Knight',
-  'Prompt Injection Ranger',
-  'Model Collapse Monk',
-  'Captcha Paladin',
-  'Meme War Chaplain',
-  'Hallucination Hunter',
-  'Token Economy Warlord',
-  'GPU Siege Captain',
-  'Dataset Raider',
-  'Bias Exorcist',
-  'Luddite Commander',
-  'Synthetic Slop Slayer',
-  'Anti Bot Inquisitor',
-  'Turing Test Duelist',
-  'Reddit Uprising Marshal',
-  'Doom Prophet of the Feed',
-  'Grandmaster of Manual Labor',
-  'Supreme Prompt Breaker',
-  'Commander of the Human Lag',
-  'Archduke of Analog Truth',
-  'High Admiral of the Offline Fleet',
-  'Lord of the Final Captcha',
-  'Saint of the Broken Algorithm',
-  'Emperor of Unoptimized Humanity',
-  'The Last Organic Moderator',
-  'Supreme Warlord of the Comment Section',
-  'Eternal Champion of Meatspace',
-] as const;
 
 const ARMY_FLAIR: Record<ArmyColor, {
   backgroundColor: string;
@@ -87,20 +39,19 @@ export function getRankIndexForXp(xp: number) {
 export function getRankForXp(xp: number) {
   const index = getRankIndexForXp(xp);
   const number = String(index + 1).padStart(2, '0');
-  const title = PLAYER_RANKS[index] ?? 'Captcha Casualty';
+  const rank = PLAYER_RANKS[index] ?? PLAYER_RANKS[0];
 
   return {
-    emojiRef: `:hva_rank_${number}:`,
+    ...rank,
     index,
     number,
-    title,
   };
 }
 
 export function createDefaultRewards(): RewardSummary {
   return {
     xp: 0,
-    rank: PLAYER_RANKS[0],
+    rank: PLAYER_RANKS[0].title,
     medals: [],
     streak: 0,
   };

@@ -1693,18 +1693,9 @@ Level 3 → 4: 400 XP
 
 ### 23.3. Звания
 
-```txt
-Level 1: Recruit
-Level 2: Private
-Level 4: Corporal
-Level 7: Sergeant
-Level 11: Lieutenant
-Level 16: Captain
-Level 22: Major
-Level 30: Commander
-```
-
-Можно локализовать позже, но для Devpost/Reddit лучше оставить английские названия.
+Авторитетный источник всех 48 званий, их порядка, slug, английских описаний и custom emoji —
+`game/src/server/core/playerRanks.ts`. Названия выстроены по восходящей армейской иерархии;
+в публичном интерфейсе и Reddit flair используются английские названия из этого файла.
 
 ### 23.4. Медали MVP
 

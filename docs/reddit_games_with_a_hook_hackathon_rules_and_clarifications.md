@@ -300,6 +300,9 @@ Production loop:
 - дивизии получают очки;
 - игрок сохраняет звание, медали, streak.
 
+Авторитетный список 48 званий, slug, описаний и custom emoji:
+`game/src/server/core/playerRanks.ts`.
+
 Demo loop:
 - фазы по 3 минуты;
 - полный цикл показывается быстро.
