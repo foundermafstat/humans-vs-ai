@@ -1,11 +1,10 @@
 import type { ArmyColor, RewardSummary } from '../../shared/api';
 import { PLAYER_RANKS } from './playerRanks';
+import { getRankLevelForXp } from './playerProgressionRules';
 
 export { PLAYER_RANKS } from './playerRanks';
 
 export type PlayerFlairStatus = 'awaiting-orders' | 'orders-locked' | 'standing-by';
-
-const RANK_XP_STEP = 25;
 
 const ARMY_FLAIR: Record<ArmyColor, {
   backgroundColor: string;
@@ -31,9 +30,7 @@ const STATUS_LABELS: Record<PlayerFlairStatus, string> = {
 };
 
 export function getRankIndexForXp(xp: number) {
-  if (!Number.isFinite(xp) || xp <= 0) return 0;
-
-  return Math.min(PLAYER_RANKS.length - 1, Math.floor(xp / RANK_XP_STEP));
+  return getRankLevelForXp(xp) - 1;
 }
 
 export function getRankForXp(xp: number) {
