@@ -6,7 +6,14 @@ import type {
   BootstrapResponse,
   DivisionCommentAnalysisResponse,
   DivisionTarget,
+  TerritoryView,
 } from '../shared/api';
+import { getBattlefieldLocation, type BattlefieldLocation } from './battlefieldLocations';
+import {
+  BattlefieldNavigator,
+  projectNavigationObstacles,
+  type NavigationPoint as ScreenPoint,
+} from './battlefieldNavigation';
 
 const startButton = document.getElementById('start-button') as HTMLButtonElement;
 const testMessageButton = document.getElementById('test-message-button') as HTMLButtonElement;
@@ -47,7 +54,6 @@ type FxOptions = {
   rotation?: number;
   scale?: number;
 };
-
 type ArmyConfig = {
   team: ArmyTeam;
   source: ArmySource;
@@ -78,6 +84,12 @@ type BattleSoldier = {
   armsBaseY: number;
   lockedTarget?: BattleSoldier;
   redirectToCenterUntil?: number;
+  navigationPath: ScreenPoint[];
+  navigationTarget?: ScreenPoint;
+  nextPathfindAt: number;
+  lastProgressPoint: ScreenPoint;
+  lastProgressAt: number;
+  stuckReplans: number;
   bulletColor: number;
 };
 
@@ -91,6 +103,7 @@ const GAME_LOGOS = [
 ] as const;
 const devToolsEnabled = new URLSearchParams(window.location.search).get('dev') === '1';
 let countdownInterval: number | undefined;
+let activeBattlefieldLocation: BattlefieldLocation = getBattlefieldLocation(undefined, null);
 
 function formatDuration(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
@@ -151,29 +164,31 @@ function renderSummary(bootstrap: BootstrapResponse) {
   startButton.textContent = 'View';
 }
 
-async function loadBattleState() {
+async function loadBattleState(): Promise<TerritoryView | undefined> {
   try {
     const response = await fetch('/api/bootstrap');
     if (!response.ok) {
       renderPromo();
-      return;
+      return undefined;
     }
 
     const bootstrap: BootstrapResponse = await response.json();
 
     if (bootstrap.view === 'summary') {
       renderSummary(bootstrap);
-      return;
+      return bootstrap.battle?.activeTerritory;
     }
 
     if (bootstrap.view === 'countdown') {
       renderCountdown(bootstrap);
-      return;
+      return bootstrap.battle?.activeTerritory;
     }
 
     renderPromo();
+    return bootstrap.battle?.activeTerritory;
   } catch {
     renderPromo();
+    return undefined;
   }
 }
 
@@ -250,6 +265,15 @@ const SOLDIER_VISUAL_SCALE = 0.2;
 const SOLDIER_HP = 6;
 const SPAWN_GUARD_RANGE_MULTIPLIER = 2;
 const SPAWN_GUARD_REDIRECT_MS = 900;
+const NAVIGATION_REPATH_MS = 3000;
+const NAVIGATION_RETRY_MS = 140;
+const NAVIGATION_TARGET_DRIFT = 112;
+const NAVIGATION_WAYPOINT_REACHED = 14;
+const NAVIGATION_STUCK_MS = 700;
+const NAVIGATION_EDGE_EXTENSION = 120;
+const NAVIGATION_RESIZE_DEBOUNCE_MS = 120;
+const MAX_NAVIGATION_PLANS_PER_FRAME = 5;
+const MAX_TARGET_SEARCHES_PER_FRAME = 32;
 const SHOT_COOLDOWN = { min: 260, max: 520 };
 const GRENADE_COOLDOWN = { min: 12600, max: 21600 };
 const FX_SPRITES = {
@@ -332,13 +356,17 @@ function setupGameLogo() {
 class SplashBattleScene extends Scene {
   private background?: Phaser.GameObjects.Image;
   private soldiers: BattleSoldier[] = [];
+  private navigator: BattlefieldNavigator | undefined;
+  private navigationPlansThisFrame = 0;
+  private targetSearchesThisFrame = 0;
+  private navigationResizeTimer: Phaser.Time.TimerEvent | undefined;
 
   constructor() {
     super('SplashBattleScene');
   }
 
   preload() {
-    this.load.image(BATTLEFIELD_KEY, '/assets/battlefield.webp');
+    this.load.image(BATTLEFIELD_KEY, activeBattlefieldLocation.image);
 
     for (const source of SOURCE_ARMIES) {
       for (const variant of variantsFor(source)) {
@@ -360,6 +388,7 @@ class SplashBattleScene extends Scene {
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.handleResize, this);
+      this.navigationResizeTimer?.remove(false);
     });
 
     for (const config of ARMY_CONFIGS) {
@@ -376,6 +405,8 @@ class SplashBattleScene extends Scene {
 
   override update(time: number, delta: number) {
     const dt = delta / 1000;
+    this.navigationPlansThisFrame = 0;
+    this.targetSearchesThisFrame = 0;
 
     for (const soldier of this.soldiers) {
       if (soldier.state !== 'dead') {
@@ -391,6 +422,15 @@ class SplashBattleScene extends Scene {
     if (this.background) {
       const scale = Math.max(width / this.background.width, height / this.background.height);
       this.background.setPosition(width / 2, height / 2).setScale(scale);
+      if (!this.navigator) {
+        this.rebuildNavigation();
+      } else {
+        this.navigationResizeTimer?.remove(false);
+        this.navigationResizeTimer = this.time.delayedCall(NAVIGATION_RESIZE_DEBOUNCE_MS, () => {
+          this.navigationResizeTimer = undefined;
+          this.rebuildNavigation();
+        });
+      }
     }
   }
 
@@ -401,7 +441,13 @@ class SplashBattleScene extends Scene {
     const variant = variants[Phaser.Math.Between(0, variants.length - 1)];
     if (!variant) return;
 
-    const spawn = this.getSpawnPoint(pick(config.spawnEdges));
+    const requestedSpawn = this.getSpawnPoint(pick(config.spawnEdges));
+    const spawnTarget = { x: this.scale.width / 2, y: this.scale.height / 2 };
+    const spawn =
+      this.navigator?.nearestReachablePerimeterPoint(requestedSpawn, spawnTarget) ??
+      this.navigator?.nearestReachablePoint(requestedSpawn, spawnTarget) ??
+      this.navigator?.nearestWalkablePoint(requestedSpawn) ??
+      requestedSpawn;
     const bodyOffset = BODY_OFFSETS[config.source];
     const armsOffset = ARMS_OFFSETS[config.source];
     const size = Phaser.Math.FloatBetween(1.35, 1.7) * SOLDIER_VISUAL_SCALE;
@@ -433,6 +479,11 @@ class SplashBattleScene extends Scene {
       bodyBaseY: bodyOffset.y,
       armsBaseX: armsOffset.x,
       armsBaseY: armsOffset.y,
+      navigationPath: [],
+      nextPathfindAt: this.time.now + (this.soldiers.length % 11) * 29,
+      lastProgressPoint: { ...spawn },
+      lastProgressAt: this.time.now,
+      stuckReplans: 0,
       bulletColor: config.bulletColor,
     });
   }
@@ -470,13 +521,9 @@ class SplashBattleScene extends Scene {
 
     if (distance > soldier.range) {
       soldier.state = 'march';
-      const nextX = soldier.container.x + (dx / distance) * soldier.speed * dt;
-      const nextY = soldier.container.y + (dy / distance) * soldier.speed * dt;
-      if (this.canEnterOpponentSpawnGuard(soldier, nextX, nextY)) {
-        soldier.container.x = nextX;
-        soldier.container.y = nextY;
-      } else {
+      if (!this.moveSoldierToward(soldier, targetPoint, dt, true)) {
         delete soldier.lockedTarget;
+        this.clearNavigation(soldier);
         soldier.redirectToCenterUntil = time + SPAWN_GUARD_REDIRECT_MS;
         this.moveTowardMapCenter(soldier, dt);
       }
@@ -512,18 +559,21 @@ class SplashBattleScene extends Scene {
   }
 
   private findTarget(soldier: BattleSoldier) {
+    if (this.targetSearchesThisFrame >= MAX_TARGET_SEARCHES_PER_FRAME) return undefined;
+    this.targetSearchesThisFrame += 1;
     let closest: BattleSoldier | undefined;
     let closestDistance = Number.POSITIVE_INFINITY;
+    const from = { x: soldier.container.x, y: soldier.container.y };
 
     for (const target of this.soldiers) {
       if (target.team === soldier.team || target.state === 'dead') continue;
 
       const point = this.getBodyPoint(target);
       const distance = Phaser.Math.Distance.Between(soldier.container.x, soldier.container.y, point.x, point.y);
-      if (distance < closestDistance) {
-        closest = target;
-        closestDistance = distance;
-      }
+      if (distance >= closestDistance) continue;
+      if (this.navigator && !this.navigator.isReachable(from, point)) continue;
+      closest = target;
+      closestDistance = distance;
     }
 
     return closest;
@@ -539,6 +589,7 @@ class SplashBattleScene extends Scene {
     const nextTarget = this.findTarget(soldier);
     if (nextTarget) {
       soldier.lockedTarget = nextTarget;
+      this.clearNavigation(soldier);
     }
 
     return nextTarget;
@@ -911,15 +962,160 @@ class SplashBattleScene extends Scene {
   }
 
   private moveTowardMapCenter(soldier: BattleSoldier, dt: number) {
-    const dx = this.scale.width / 2 - soldier.container.x;
-    const dy = this.scale.height / 2 - soldier.container.y;
+    this.moveSoldierToward(
+      soldier,
+      {
+        x: this.scale.width / 2,
+        y: this.scale.height / 2,
+      },
+      dt,
+      false,
+    );
+  }
+
+  private moveSoldierToward(
+    soldier: BattleSoldier,
+    target: ScreenPoint,
+    dt: number,
+    enforceSpawnGuard: boolean,
+  ) {
+    const from = { x: soldier.container.x, y: soldier.container.y };
+    const navigator = this.navigator;
+    const now = this.time.now;
+    const targetDrift = soldier.navigationTarget
+      ? Phaser.Math.Distance.Between(
+          target.x,
+          target.y,
+          soldier.navigationTarget.x,
+          soldier.navigationTarget.y,
+        )
+      : Number.POSITIVE_INFINITY;
+    const progressDistance = Phaser.Math.Distance.Between(
+      from.x,
+      from.y,
+      soldier.lastProgressPoint.x,
+      soldier.lastProgressPoint.y,
+    );
+    const stalled = now - soldier.lastProgressAt >= NAVIGATION_STUCK_MS && progressDistance < 4;
+
+    if (
+      navigator &&
+      this.navigationPlansThisFrame < MAX_NAVIGATION_PLANS_PER_FRAME &&
+      (targetDrift >= NAVIGATION_TARGET_DRIFT || now >= soldier.nextPathfindAt || stalled)
+    ) {
+      this.navigationPlansThisFrame += 1;
+      soldier.navigationPath = navigator.findPath(from, target);
+      soldier.navigationTarget = { ...target };
+      soldier.nextPathfindAt = now + NAVIGATION_REPATH_MS;
+      soldier.stuckReplans = stalled ? soldier.stuckReplans + 1 : 0;
+
+      if (soldier.navigationPath.length === 0 && soldier.stuckReplans >= 2) {
+        const escapePoint = navigator.nearestWalkablePoint(from);
+        if (escapePoint && Phaser.Math.Distance.Between(from.x, from.y, escapePoint.x, escapePoint.y) > 3) {
+          soldier.navigationPath = [escapePoint];
+        }
+      }
+    }
+
+    while (soldier.navigationPath.length > 0) {
+      const waypoint = soldier.navigationPath[0];
+      if (!waypoint) break;
+      if (Phaser.Math.Distance.Between(from.x, from.y, waypoint.x, waypoint.y) >= NAVIGATION_WAYPOINT_REACHED) {
+        break;
+      }
+      soldier.navigationPath.shift();
+    }
+
+    let moveTarget = soldier.navigationPath[0];
+    if (!moveTarget) {
+      if (navigator && !navigator.isSegmentClear(from, target)) return true;
+      moveTarget = target;
+    }
+
+    const dx = moveTarget.x - from.x;
+    const dy = moveTarget.y - from.y;
     const distance = Math.max(Math.hypot(dx, dy), 1);
+    const step = Math.min(soldier.speed * dt, distance);
+    const nextX = from.x + (dx / distance) * step;
+    const nextY = from.y + (dy / distance) * step;
+
+    if (enforceSpawnGuard && !this.canEnterOpponentSpawnGuard(soldier, nextX, nextY)) {
+      return false;
+    }
+
+    if (navigator && !navigator.isBlocked(from) && navigator.isBlocked({ x: nextX, y: nextY })) {
+      const escapePoint = soldier.stuckReplans >= 2 ? navigator.nearestWalkablePoint(from) : undefined;
+      soldier.navigationPath =
+        escapePoint &&
+        Phaser.Math.Distance.Between(from.x, from.y, escapePoint.x, escapePoint.y) > 3 &&
+        navigator.isSegmentClear(from, escapePoint)
+          ? [escapePoint]
+          : [];
+      soldier.nextPathfindAt = Math.min(soldier.nextPathfindAt, now + NAVIGATION_RETRY_MS);
+      return true;
+    }
 
     soldier.facing = dx >= 0 ? 1 : -1;
     soldier.container.setScale(soldier.facing * soldier.size, soldier.size);
-    soldier.container.x += (dx / distance) * soldier.speed * dt;
-    soldier.container.y += (dy / distance) * soldier.speed * dt;
-    soldier.container.setDepth(soldier.container.y);
+    soldier.container.setPosition(nextX, nextY).setDepth(nextY);
+    if (
+      Phaser.Math.Distance.Between(
+        nextX,
+        nextY,
+        soldier.lastProgressPoint.x,
+        soldier.lastProgressPoint.y,
+      ) >= 4
+    ) {
+      soldier.lastProgressPoint = { x: nextX, y: nextY };
+      soldier.lastProgressAt = now;
+      soldier.stuckReplans = 0;
+    }
+    return true;
+  }
+
+  private clearNavigation(soldier: BattleSoldier) {
+    soldier.navigationPath = [];
+    delete soldier.navigationTarget;
+    soldier.nextPathfindAt = 0;
+    soldier.lastProgressPoint = { x: soldier.container.x, y: soldier.container.y };
+    soldier.lastProgressAt = this.time.now;
+    soldier.stuckReplans = 0;
+  }
+
+  private rebuildNavigation() {
+    const background = this.background;
+    if (!background) {
+      this.navigator = undefined;
+      return;
+    }
+
+    const obstacles = projectNavigationObstacles(activeBattlefieldLocation.obstacles, {
+      sourceWidth: background.width,
+      sourceHeight: background.height,
+      width: this.scale.width,
+      height: this.scale.height,
+      edgeExtension: NAVIGATION_EDGE_EXTENSION,
+    });
+
+    this.navigator = new BattlefieldNavigator({
+      width: this.scale.width,
+      height: this.scale.height,
+      obstacles,
+    });
+
+    for (const soldier of this.soldiers) {
+      this.clearNavigation(soldier);
+      const lockedTarget = soldier.lockedTarget;
+      if (
+        lockedTarget &&
+        !this.navigator.isReachable(
+          { x: soldier.container.x, y: soldier.container.y },
+          this.getBodyPoint(lockedTarget),
+        )
+      ) {
+        delete soldier.lockedTarget;
+      }
+    }
   }
 
   private getSpawnGuardPoint(edge: SpawnEdge) {
@@ -981,6 +1177,13 @@ function startBattlefield() {
   });
 }
 
+async function initializeSplash() {
+  const territory = await loadBattleState();
+  const requestedLocation = new URLSearchParams(window.location.search).get('location');
+  activeBattlefieldLocation = getBattlefieldLocation(territory, requestedLocation);
+  startBattlefield();
+}
+
 startButton.addEventListener('click', (event) => {
   requestExpandedMode(event, 'game');
 });
@@ -1000,6 +1203,5 @@ commentsBlueButton.addEventListener('click', () => {
 testMessageButton.hidden = !devToolsEnabled;
 commentsGreenButton.hidden = !devToolsEnabled;
 commentsBlueButton.hidden = !devToolsEnabled;
-void loadBattleState();
 setupGameLogo();
-startBattlefield();
+void initializeSplash();

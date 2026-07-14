@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "confirmed_at": "2026-07-13",
+  "game_decisions": [
+    {
+      "id": "FIXED-GAME-001",
+      "topic": "antagonist_name",
+      "decision": "Каноническое название стороны и сущности — «Искусственный интеллект»; краткая форма — «ИИ».",
+      "legacy_terms": ["Red Dot", "Global Mind"],
+      "status": "confirmed"
+    },
+    {
+      "id": "FIXED-GAME-002",
+      "topic": "doctrine_count",
+      "decision": "Боевая система строится вокруг семи доктрин.",
+      "status": "confirmed"
+    }
+  ],
+  "interview_decisions": [
+    {
+      "id": "FIXED-INTERVIEW-001",
+      "decision": "Банк содержит ровно 1000 вопросов и идёт от глобальных решений к частным.",
+      "status": "confirmed"
+    },
+    {
+      "id": "FIXED-INTERVIEW-002",
+      "decision": "Один раунд содержит 10 вопросов.",
+      "status": "confirmed"
+    },
+    {
+      "id": "FIXED-INTERVIEW-003",
+      "decision": "Каждый вопрос предлагает несколько вариантов, возможность отложить решение и собственный ответ.",
+      "status": "confirmed"
+    },
+    {
+      "id": "FIXED-INTERVIEW-004",
+      "decision": "Подтверждённые ответы имеют приоритет над обоими исходными GDD и текущей реализацией.",
+      "status": "confirmed"
+    }
+  ]
+}
+

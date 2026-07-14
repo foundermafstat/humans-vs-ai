@@ -13,6 +13,8 @@
     "login": "devvit login",
     "prettier": "prettier --write .",
     "test:core": "node scripts/verify-core.mjs",
+    "test:battlefields": "tsc --build tools/tsconfig.client.json && node scripts/verify-battlefield-locations.mjs",
+    "test:navigation": "tsc --build tools/tsconfig.client.json && node scripts/verify-navigation.mjs",
     "type-check": "tsc --build"
   },
   "engines": {
