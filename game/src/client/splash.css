@@ -47,7 +47,7 @@ body,
   width: auto;
   height: auto;
   pointer-events: none;
-  transform: translateX(-50%) scale(0.6);
+  transform: translateX(-50%) scale(0.45);
   transform-origin: top center;
 }
 
