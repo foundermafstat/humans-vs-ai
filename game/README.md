@@ -10,7 +10,8 @@ The target MVP loop is:
 
 ```txt
 daily battle
--> join army
+-> request participation and receive an immediate balanced assignment
+-> receive a temporary army flair (or cover flair for a spy)
 -> choose one hidden doctrine from the 7-doctrine system
 -> coordinate or misdirect in war-room comments
 -> aggregate comment signals
@@ -19,7 +20,18 @@ daily battle
 -> doctrine-based battle resolution
 -> territory and progression update
 -> battle report and rewards
+-> reset temporary flair to neutral gray
 ```
+
+Green and Blue have no captain or command hierarchy. Every participant has one
+equal-weight doctrine order; deterministic battle-seed hashing resolves an
+internal tie. Spy is the only special role: the order counts for the true army,
+while the public flair shows the opposing cover army.
+
+Each Daily Post starts with exactly three app comments: pinned AI Responses,
+Green HQ, and Blue HQ. There is no distribution/index comment.
+
+Canonical daily-cycle rules: `../docs/daily_event_cycle_ru.md`.
 
 ## Doctrine System
 

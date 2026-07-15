@@ -7,12 +7,94 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="game.css" />
-    <title>Phaser - Template</title>
+    <title>Humans vs AI</title>
   </head>
 
   <body>
     <div id="app">
       <div id="game-container"></div>
+
+      <button
+        class="global-map-toggle"
+        id="global-map-toggle"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="global-map-dialog"
+      >
+        <span aria-hidden="true">▦</span>
+        Global map
+      </button>
+
+      <dialog
+        class="global-map-dialog"
+        id="global-map-dialog"
+        aria-labelledby="global-map-title"
+      >
+        <div class="global-map-dialog__shell">
+          <header class="global-map-dialog__header">
+            <div>
+              <p class="global-map-dialog__eyebrow">Global theater</p>
+              <h1 id="global-map-title">Territory control</h1>
+            </div>
+            <button
+              class="global-map-dialog__close"
+              id="global-map-close"
+              type="button"
+              aria-label="Close global map"
+            >
+              ×
+            </button>
+          </header>
+
+          <p class="global-map-dialog__status" id="global-map-status" role="status" aria-live="polite">
+            Open the map to load current territory control.
+          </p>
+
+          <div class="global-map-dialog__body">
+            <section class="global-map-overview" aria-labelledby="global-map-overview-title">
+              <h2 id="global-map-overview-title">World sectors</h2>
+              <div class="global-map-frame">
+                <img
+                  src="/assets/maps/world.webp"
+                  alt="Global campaign map divided into thirty sectors"
+                />
+                <div
+                  class="global-map-grid"
+                  id="global-map-grid"
+                  role="group"
+                  aria-label="Select a world map sector to inspect its capture history"
+                ></div>
+              </div>
+              <div class="global-map-legend" aria-label="Territory owner legend">
+                <span><i class="global-map-legend__swatch global-map-legend__swatch--green"></i>Green</span>
+                <span><i class="global-map-legend__swatch global-map-legend__swatch--blue"></i>Blue</span>
+                <span><i class="global-map-legend__swatch global-map-legend__swatch--ai"></i>AI</span>
+                <span><i class="global-map-legend__swatch global-map-legend__swatch--contested"></i>Contested</span>
+                <span>Today = current battle</span>
+                <span>Next = next objective</span>
+              </div>
+            </section>
+
+            <aside
+              class="global-map-history"
+              id="global-map-history"
+              aria-labelledby="global-map-history-title"
+            >
+              <p class="global-map-dialog__eyebrow">Sector log</p>
+              <h2 id="global-map-history-title">Select a sector</h2>
+              <p
+                class="global-map-history__meta"
+                id="global-map-history-meta"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                Daily occupation records will appear here.
+              </p>
+              <ol class="global-map-history__list" id="global-map-history-list"></ol>
+            </aside>
+          </div>
+        </div>
+      </dialog>
     </div>
     <script type="module" src="game.ts"></script>
   </body>

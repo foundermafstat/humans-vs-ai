@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import type {
   AiReportResponse,
-  ArmyColor,
   BootstrapResponse,
   DecrementResponse,
   DevActionResponse,
@@ -11,20 +10,32 @@ import type {
   DevWarRoomState,
   DivisionCommentAnalysisResponse,
   DivisionTarget,
+  DailyLeaderboardResponse,
+  EligibleCommentsResponse,
+  GlobalMapResponse,
+  GlobalLeaderboardResponse,
   IncrementResponse,
   InitResponse,
   OrderResponse,
   PlayerJoinResponse,
-  SpyResponse,
+  PublicPlayerProfileResponse,
+  PublicBattleResultResponse,
+  SpySuspicionResponse,
 } from '../../shared/api';
 import { DEV_GREEN_PROFILE, DEV_USER_COMMENT_TEXT } from '../../shared/api';
 import { normalizeDoctrineId } from '../core/doctrines';
 import {
   getBootstrapResponse,
+  getDailyLeaderboard,
+  getEligibleComments,
+  getPublicPlayerProfile,
+  getPublicBattleResult,
+  submitSpySuspicion,
+  getGlobalMapResponse,
+  getGlobalLeaderboard,
   joinCurrentPlayer,
   postAiStatusReport,
   postDivisionCommentAnalysis,
-  respondToSpyOffer,
   syncCurrentPlayerFlair,
   submitDoctrineOrder,
 } from '../core/dailyCycle';
@@ -70,7 +81,7 @@ const THREAD_BODIES: Record<DevThreadTarget, string> = {
 const GAME_COMMENT_TEXT: Record<DevThreadTarget, string> = {
   ai: 'AI RESPONSE // Your coordination has been logged. Continue arguing in public.',
   green: 'GREEN HQ // Shield doctrine active. Hold the line and report clean signals.',
-  blue: 'BLUE HQ // Blue command is monitoring the flank. Keep plans disciplined.',
+  blue: 'BLUE HQ // The flank is active. Keep plans disciplined.',
 };
 function getWarRoomKey(postId: string) {
   return `dev:war-room:${postId}`;
@@ -158,8 +169,6 @@ function isWarRoomState(value: unknown): value is DevWarRoomState {
   return (
     typeof value.postId === 'string' &&
     typeof value.postPermalink === 'string' &&
-    typeof value.indexCommentId === 'string' &&
-    typeof value.indexPermalink === 'string' &&
     typeof value.createdAt === 'string' &&
     typeof value.threadIds.ai === 'string' &&
     typeof value.threadIds.green === 'string' &&
@@ -205,18 +214,6 @@ function createDevActionResponse(message: string, warRoom?: DevWarRoomState): De
   if (warRoom) response.warRoom = warRoom;
 
   return response;
-}
-
-function createIndexCommentText(warRoom: Pick<DevWarRoomState, 'threadPermalinks'>) {
-  return [
-    '## Official War Room Branches',
-    '',
-    'Pinned index for this dev battle post. Use the linked branches below; only this index is sticky.',
-    '',
-    `- ${THREAD_TITLES.ai}: [Open branch](${toRedditUrl(warRoom.threadPermalinks.ai)})`,
-    `- ${THREAD_TITLES.green}: [Open branch](${toRedditUrl(warRoom.threadPermalinks.green)})`,
-    `- ${THREAD_TITLES.blue}: [Open branch](${toRedditUrl(warRoom.threadPermalinks.blue)})`,
-  ].join('\n');
 }
 
 async function getCurrentWarRoom() {
@@ -280,18 +277,101 @@ api.get('/bootstrap', async (c) => {
   }
 });
 
+api.get('/global-map', async (c) => {
+  try {
+    return c.json<GlobalMapResponse>(await getGlobalMapResponse());
+  } catch (error) {
+    console.error(`API Global Map Error: ${error}`);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: 'Failed to load global territory history',
+      },
+      400
+    );
+  }
+});
+
+api.get('/leaderboard/global', async (c) => {
+  try {
+    return c.json<GlobalLeaderboardResponse>(await getGlobalLeaderboard(c.req.query('cursor')));
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load global leaderboard',
+    }, 400);
+  }
+});
+
+api.get('/eligible-comments', async (c) => {
+  try {
+    return c.json<EligibleCommentsResponse>(await getEligibleComments(c.req.query('cursor')));
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load eligible comments',
+    }, 400);
+  }
+});
+
+api.get('/battles/:battleId/leaderboard', async (c) => {
+  try {
+    return c.json<DailyLeaderboardResponse>(await getDailyLeaderboard(
+      c.req.param('battleId'),
+      c.req.query('cursor'),
+    ));
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load leaderboard',
+    }, 404);
+  }
+});
+
+api.get('/battles/:battleId/result', async (c) => {
+  try {
+    return c.json<PublicBattleResultResponse>(await getPublicBattleResult(c.req.param('battleId')));
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load battle result',
+    }, 404);
+  }
+});
+
+api.get('/profiles/me', async (c) => {
+  try {
+    return c.json<PublicPlayerProfileResponse>(await getPublicPlayerProfile());
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load profile',
+    }, 404);
+  }
+});
+
+api.get('/profiles/:username', async (c) => {
+  try {
+    return c.json<PublicPlayerProfileResponse>(await getPublicPlayerProfile(c.req.param('username')));
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load profile',
+    }, 404);
+  }
+});
+
 api.post('/player/join', async (c) => {
   try {
-    const body: { army?: unknown } = await c.req.json().catch(() => ({}));
-    const army: ArmyColor = body.army === 'blue' ? 'blue' : 'green';
-
-    return c.json<PlayerJoinResponse>(await joinCurrentPlayer(army));
+    return c.json<PlayerJoinResponse>(await joinCurrentPlayer());
   } catch (error) {
     console.error(`API Player Join Error: ${error}`);
     return c.json<ErrorResponse>(
       {
         status: 'error',
-        message: 'Failed to join daily battle',
+        message: error instanceof Error
+          ? error.message
+          : 'Failed to join the daily event',
       },
       400
     );
@@ -300,7 +380,7 @@ api.post('/player/join', async (c) => {
 
 api.post('/orders', async (c) => {
   try {
-    const body: { doctrineId?: unknown } = await c.req.json().catch(() => ({}));
+    const body: { doctrineId?: unknown; sourceCommentId?: unknown } = await c.req.json().catch(() => ({}));
     const doctrineId = normalizeDoctrineId(body.doctrineId);
     if (!doctrineId) {
       return c.json<ErrorResponse>(
@@ -311,8 +391,14 @@ api.post('/orders', async (c) => {
         400
       );
     }
+    if (typeof body.sourceCommentId !== 'string' || !body.sourceCommentId.startsWith('t1_')) {
+      return c.json<ErrorResponse>({
+        status: 'error',
+        message: 'sourceCommentId must be a Reddit comment id',
+      }, 400);
+    }
 
-    return c.json<OrderResponse>(await submitDoctrineOrder(doctrineId));
+    return c.json<OrderResponse>(await submitDoctrineOrder(doctrineId, body.sourceCommentId));
   } catch (error) {
     console.error(`API Order Error: ${error}`);
     return c.json<ErrorResponse>(
@@ -325,20 +411,18 @@ api.post('/orders', async (c) => {
   }
 });
 
-api.post('/spy/respond', async (c) => {
+api.post('/spy/suspicions', async (c) => {
   try {
-    const body: { accept?: unknown } = await c.req.json().catch(() => ({}));
-
-    return c.json<SpyResponse>(await respondToSpyOffer({ accept: body.accept === true }));
+    const body: { commentId?: unknown } = await c.req.json().catch(() => ({}));
+    if (typeof body.commentId !== 'string' || !body.commentId.startsWith('t1_')) {
+      return c.json<ErrorResponse>({ status: 'error', message: 'commentId must be a Reddit comment id' }, 400);
+    }
+    return c.json<SpySuspicionResponse>(await submitSpySuspicion(body.commentId));
   } catch (error) {
-    console.error(`API Spy Response Error: ${error}`);
-    return c.json<ErrorResponse>(
-      {
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Failed to update spy offer',
-      },
-      400
-    );
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to save counterintelligence choice',
+    }, 400);
   }
 });
 
@@ -448,7 +532,7 @@ api.post('/dev/apply-flair', async (c) => {
       return c.json<ErrorResponse>(
         {
           status: 'error',
-          message: 'Join an army before applying player flair',
+          message: 'Join today\'s event before applying temporary player flair',
         },
         400
       );
@@ -489,32 +573,21 @@ api.post('/dev/create-war-post', async (c) => {
       text: THREAD_BODIES.blue,
       runAs: 'APP',
     }));
-    const partialWarRoom = {
-      threadPermalinks: {
-        ai: aiThread.permalink,
-        green: greenThread.permalink,
-        blue: blueThread.permalink,
-      },
-    };
-    const indexComment = await withRedditRateLimitRetry(() => reddit.submitComment({
-      id: post.id,
-      text: createIndexCommentText(partialWarRoom),
-      runAs: 'APP',
-    }));
-
-    await withRedditRateLimitRetry(() => indexComment.distinguish(true));
+    await withRedditRateLimitRetry(() => aiThread.distinguish(true));
 
     const warRoom: DevWarRoomState = {
       postId: post.id,
       postPermalink: post.permalink,
-      indexCommentId: indexComment.id,
-      indexPermalink: indexComment.permalink,
       threadIds: {
         ai: aiThread.id,
         green: greenThread.id,
         blue: blueThread.id,
       },
-      threadPermalinks: partialWarRoom.threadPermalinks,
+      threadPermalinks: {
+        ai: aiThread.permalink,
+        green: greenThread.permalink,
+        blue: blueThread.permalink,
+      },
       createdAt: new Date().toISOString(),
     };
 

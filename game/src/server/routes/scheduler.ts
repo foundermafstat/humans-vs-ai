@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import {
-  createNextDailyBattle,
   isNewYorkWallTime,
+  reconcileDailyCycle,
+  retryPendingPlayerFlairs,
   resolveCurrentDailyBattle,
 } from '../core/dailyCycle';
 
@@ -30,5 +31,13 @@ scheduler.post('/create-daily-battle', async (c) => {
     });
   }
 
-  return c.json(await createNextDailyBattle(now));
+  return c.json(await reconcileDailyCycle(now));
+});
+
+scheduler.post('/reconcile-daily-cycle', async (c) => {
+  return c.json(await reconcileDailyCycle());
+});
+
+scheduler.post('/retry-player-flairs', async (c) => {
+  return c.json(await retryPendingPlayerFlairs());
 });

@@ -44,6 +44,9 @@ export function getBattlefieldLocation(territory: TerritoryView | undefined, ove
 
   if (!territory) return fallbackLocation;
 
+  const exactLocation = locationsById.get(territory.id);
+  if (exactLocation) return exactLocation;
+
   const column = clamp(Math.floor((territory.x / 100) * 6) + 1, 1, 6);
   const row = clamp(Math.floor((territory.y / 100) * 5) + 1, 1, 5);
 

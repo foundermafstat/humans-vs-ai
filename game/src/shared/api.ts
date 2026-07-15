@@ -11,6 +11,8 @@ export type BattleStatus = "active" | "resolved";
 
 export type ArmyColor = "green" | "blue";
 
+export type GlobalAffiliation = "gray";
+
 export type DivisionTarget = "green" | "blue";
 
 export type BattleSide = ArmyColor | "ai";
@@ -33,7 +35,8 @@ export type DoctrineId = (typeof DOCTRINE_IDS)[number];
 
 export const MVP_GAME_LOOP_STEPS = [
   "daily-battle",
-  "join-army",
+  "join-and-balanced-assignment",
+  "temporary-team-or-cover-flair",
   "choose-hidden-doctrine",
   "war-room-comments",
   "comment-signal-aggregation",
@@ -50,19 +53,65 @@ export type DoctrineOrder = {
   battleId: string;
   army: ArmyColor;
   doctrineId: DoctrineId;
+  sourceCommentId: string;
+  sourceCommentPermalink?: string;
   submittedAt: string;
 };
 
 export type OrderRequest = {
   doctrineId: DoctrineId;
+  sourceCommentId: string;
+};
+
+export type EligibleCommentView = {
+  id: string;
+  authorUsername: string;
+  excerpt: string;
+  createdAt: string;
+  permalink?: string;
+};
+
+export type EligibleCommentsResponse = {
+  type: "eligible-comments";
+  battleId: string;
+  army: ArmyColor;
+  warRoomPermalink: string;
+  comments: readonly EligibleCommentView[];
+  nextCursor?: string;
+};
+
+export type PlayerPowerView = {
+  xp: number;
+  rankLevel: number;
+  rank: string;
+  rankProgress: number;
+  total: number;
+};
+
+export type EventParticipantView = {
+  battleId: string;
+  assignedArmy: ArmyColor;
+  confirmedAt: string;
+  powerSnapshot: PlayerPowerView;
+};
+
+export type ArmyBalanceView = {
+  participantCount: number;
+  totalPower: number;
 };
 
 export type PlayerBattleState = {
   exists: boolean;
+  username?: string;
+  affiliation?: GlobalAffiliation;
+  participating: boolean;
+  participant?: EventParticipantView;
   army?: ArmyColor;
   order?: DoctrineOrder;
-  spyOffer?: SpyOfferView;
+  spyAssignment?: SpyAssignmentView;
   rewards?: RewardSummary;
+  dailyReward?: PersonalBattleRewardView;
+  spySuspicion?: SpySuspicionView;
 };
 
 export type OrderResponse = {
@@ -71,20 +120,26 @@ export type OrderResponse = {
   player: PlayerBattleState;
 };
 
-export type SpyResponseRequest = {
-  accept: boolean;
+export type SpyAssignmentView = {
+  active: true;
+  coverArmy: ArmyColor;
+  objective: string;
+  targetDoctrineHint: DoctrineId;
 };
 
-export type SpyOfferView = {
-  offered: boolean;
-  accepted?: boolean;
-  objective?: string;
-  targetDoctrineHint?: DoctrineId;
+export type SpySuspicionView = {
+  commentId: string;
+  suspectedUsername: string;
+  submittedAt: string;
 };
 
-export type SpyResponse = {
-  type: "spy-response";
-  spyOffer: SpyOfferView;
+export type SpySuspicionRequest = {
+  commentId: string;
+};
+
+export type SpySuspicionResponse = {
+  type: "spy-suspicion";
+  suspicion: SpySuspicionView;
 };
 
 export type TerritoryView = {
@@ -94,6 +149,52 @@ export type TerritoryView = {
   x: number;
   y: number;
 };
+
+export type TerritoryTargetReason =
+  | "unoccupied"
+  | "attack-ai"
+  | "attack-rival-human"
+  | "attack-human"
+  | "retry-draw";
+
+export type TerritoryTargetView = {
+  territory: TerritoryView;
+  selectedBy: BattleSide | "system";
+  distance: number;
+  reason: TerritoryTargetReason;
+};
+
+export type CampaignCompletionView = {
+  winner: BattleSide;
+  finalBattleId: string;
+  completedAt: string;
+  report: {
+    status: "pending" | "generated" | "published";
+    generatedAt?: string;
+    publishedAt?: string;
+    permalink?: string;
+    lastError?: string;
+  };
+};
+
+export type CampaignTransition =
+  | {
+      type: "next-target";
+      target: TerritoryTargetView;
+    }
+  | {
+      type: "campaign-complete";
+      completion: CampaignCompletionView;
+    };
+
+export type CampaignStateView =
+  | {
+      status: "active";
+    }
+  | {
+      status: "complete";
+      completion: CampaignCompletionView;
+    };
 
 export type CommentSignalView = {
   branch: DivisionTarget;
@@ -112,6 +213,108 @@ export type RewardSummary = {
   streak: number;
 };
 
+export const MEDAL_CATALOG = {
+  "First Deployment": {
+    id: "first-deployment",
+    title: "First Deployment",
+    description: "Submitted the first valid doctrine order.",
+    rarity: "common",
+    assetPath: "/assets/medals/medal_001.webp",
+  },
+  "Territory Captured": {
+    id: "territory-captured",
+    title: "Territory Captured",
+    description: "Participated when the assigned army captured the active territory.",
+    rarity: "rare",
+    assetPath: "/assets/medals/medal_002.webp",
+  },
+} as const;
+
+export type DailyXpBreakdownView = {
+  participationXp: number;
+  activityXp: number;
+  resultXp: number;
+  missionXp: number;
+  streakMultiplier: number;
+  comebackXp: number;
+  capReductionXp: number;
+};
+
+export type PersonalBattleRewardView = {
+  xpBefore: number;
+  xpAwarded: number;
+  xpAfter: number;
+  rankBefore: string;
+  rankAfter: string;
+  rankAfterLevel: number;
+  rankUp: boolean;
+  newMedals: readonly string[];
+  breakdown: DailyXpBreakdownView;
+  appliedAt: string;
+};
+
+export type DailyLeaderboardEntry = {
+  position: number;
+  username: string;
+  army: ArmyColor;
+  rank: string;
+  rankLevel: number;
+  xpAwarded: number;
+  newMedals: readonly string[];
+  isCurrentUser: boolean;
+};
+
+export type DailyLeaderboardResponse = {
+  type: "daily-leaderboard";
+  battleId: string;
+  entries: readonly DailyLeaderboardEntry[];
+  currentUserEntry?: DailyLeaderboardEntry;
+  nextCursor?: string;
+};
+
+export type PublicProfileBattleView = {
+  battleId: string;
+  battleDate: string;
+  army: ArmyColor;
+  winner: BattleWinner;
+  territoryName: string;
+  postPermalink: string;
+};
+
+export type PublicPlayerProfileResponse = {
+  type: "public-profile";
+  username: string;
+  shareSlug: string;
+  xp: number;
+  rank: string;
+  rankLevel: number;
+  rankProgress: number;
+  streak: number;
+  medals: readonly string[];
+  totalParticipatedEvents: number;
+  totalVictories: number;
+  recentBattles: readonly PublicProfileBattleView[];
+};
+
+export type GlobalLeaderboardEntry = {
+  position: number;
+  username: string;
+  xp: number;
+  rank: string;
+  rankLevel: number;
+  victories: number;
+  participatedEvents: number;
+  medals: number;
+  isCurrentUser: boolean;
+};
+
+export type GlobalLeaderboardResponse = {
+  type: "global-leaderboard";
+  entries: readonly GlobalLeaderboardEntry[];
+  currentUserEntry?: GlobalLeaderboardEntry;
+  nextCursor?: string;
+};
+
 export type BattleScoreBreakdown = {
   doctrineScore: number;
   orderParticipationScore: number;
@@ -126,6 +329,7 @@ export type BattleResultView = {
   winner: BattleWinner;
   activeTerritoryBefore: TerritoryView;
   activeTerritoryAfter: TerritoryView;
+  campaignTransition?: CampaignTransition;
   doctrines: {
     green: DoctrineId;
     blue: DoctrineId;
@@ -135,8 +339,15 @@ export type BattleResultView = {
   commentSignals: Record<DivisionTarget, CommentSignalView>;
   aiAwareness: Record<DivisionTarget, number>;
   spyInfluence: Record<DivisionTarget, number>;
-  rewards: Partial<Record<ArmyColor, RewardSummary>>;
   reportText: string;
+};
+
+export type PublicBattleResultResponse = {
+  type: "public-battle-result";
+  battleId: string;
+  battleDate: string;
+  postPermalink: string;
+  result: BattleResultView;
 };
 
 export type BootstrapBattle = {
@@ -148,8 +359,10 @@ export type BootstrapBattle = {
   resolvesAt: string;
   secondsUntilResolve: number;
   activeTerritory?: TerritoryView;
+  armyBalance: Record<ArmyColor, ArmyBalanceView>;
   result?: BattleResultView;
   resultSummary?: string;
+  warRoomPermalinks?: Record<DevThreadTarget, string>;
 };
 
 export type BootstrapResponse = {
@@ -161,10 +374,46 @@ export type BootstrapResponse = {
 };
 
 export type PlayerJoinResponse = {
-  type: "player-join";
-  user: {
+  type: "event-participation";
+  user: PlayerBattleState & {
     exists: true;
+    affiliation: GlobalAffiliation;
+    participating: true;
+    participant: EventParticipantView;
+    army: ArmyColor;
   };
+};
+
+export type TerritoryCaptureRecord = {
+  id: string;
+  battleId: string;
+  battleDate: string;
+  territoryId: string;
+  x: number;
+  y: number;
+  previousOwner: TerritoryOwner;
+  newOwner: TerritoryOwner;
+  winner: BattleWinner;
+  ownershipChanged: boolean;
+  capturedAt: string;
+  postPermalink?: string;
+};
+
+export type GlobalMapTerritoryView = TerritoryView & {
+  column: number;
+  row: number;
+  history: readonly TerritoryCaptureRecord[];
+};
+
+export type GlobalMapResponse = {
+  type: "global-map";
+  columns: number;
+  rows: number;
+  generatedAt: string;
+  activeTerritoryId?: string;
+  nextTargetId?: string;
+  campaign?: CampaignStateView;
+  territories: readonly GlobalMapTerritoryView[];
 };
 
 export type AiReportResponse = {
@@ -218,8 +467,6 @@ export type DevThreadTarget = "ai" | "green" | "blue";
 export type DevWarRoomState = {
   postId: string;
   postPermalink: string;
-  indexCommentId: string;
-  indexPermalink: string;
   threadIds: Record<DevThreadTarget, string>;
   threadPermalinks: Record<DevThreadTarget, string>;
   createdAt: string;

@@ -70,6 +70,14 @@
       "create-daily-battle-est": {
         "endpoint": "/internal/scheduler/create-daily-battle",
         "cron": "1 2 * * *"
+      },
+      "retry-player-flairs": {
+        "endpoint": "/internal/scheduler/retry-player-flairs",
+        "cron": "*/10 * * * *"
+      },
+      "reconcile-daily-cycle": {
+        "endpoint": "/internal/scheduler/reconcile-daily-cycle",
+        "cron": "*/5 * * * *"
       }
     }
   },

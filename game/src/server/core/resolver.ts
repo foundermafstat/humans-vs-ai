@@ -8,12 +8,10 @@ import {
   type CommentSignalView,
   type DoctrineId,
   type DoctrineOrder,
-  type RewardSummary,
   type TerritoryView,
 } from '../../shared/api';
 import { getCommentSignalScore, getAiAwareness } from './commentSignals';
 import { getDoctrineMatchup } from './doctrines';
-import { updateRewardSummary } from './playerProgression';
 import { applyTerritoryWinner } from './territories';
 
 export type ResolveBattleInput = {
@@ -23,7 +21,6 @@ export type ResolveBattleInput = {
   orders: readonly DoctrineOrder[];
   commentSignals: Record<ArmyColor, CommentSignalView>;
   spyInfluence: Record<ArmyColor, number>;
-  previousRewards: Partial<Record<ArmyColor, RewardSummary>>;
   seed: string;
 };
 
@@ -34,8 +31,8 @@ const DEFAULT_DOCTRINES: Record<BattleSide, DoctrineId> = {
 };
 
 export function resolveBattle(input: ResolveBattleInput): BattleResultView {
-  const greenDoctrine = getDominantDoctrine(input.orders, 'green') ?? DEFAULT_DOCTRINES.green;
-  const blueDoctrine = getDominantDoctrine(input.orders, 'blue') ?? DEFAULT_DOCTRINES.blue;
+  const greenDoctrine = getDominantDoctrine(input.orders, 'green', input.seed) ?? DEFAULT_DOCTRINES.green;
+  const blueDoctrine = getDominantDoctrine(input.orders, 'blue', input.seed) ?? DEFAULT_DOCTRINES.blue;
   const greenAwareness = getAiAwareness(input.commentSignals.green, greenDoctrine);
   const blueAwareness = getAiAwareness(input.commentSignals.blue, blueDoctrine);
   const aiDoctrine = chooseAiDoctrine({
@@ -79,7 +76,6 @@ export function resolveBattle(input: ResolveBattleInput): BattleResultView {
     ai: aiScores.total,
   });
   const activeTerritoryAfter = applyTerritoryWinner(input.activeTerritory, winner);
-  const rewards = createRewards(winner, input.previousRewards);
 
   return {
     winner,
@@ -104,7 +100,6 @@ export function resolveBattle(input: ResolveBattleInput): BattleResultView {
       green: input.spyInfluence.green,
       blue: input.spyInfluence.blue,
     },
-    rewards,
     reportText: createReportText({
       battleDate: input.battleDate,
       territory: activeTerritoryAfter,
@@ -121,7 +116,11 @@ export function resolveBattle(input: ResolveBattleInput): BattleResultView {
   };
 }
 
-export function getDominantDoctrine(orders: readonly DoctrineOrder[], army: ArmyColor) {
+export function getDominantDoctrine(
+  orders: readonly DoctrineOrder[],
+  army: ArmyColor,
+  battleSeed: string = army,
+) {
   const counts: Partial<Record<DoctrineId, number>> = {};
 
   for (const order of orders) {
@@ -129,18 +128,15 @@ export function getDominantDoctrine(orders: readonly DoctrineOrder[], army: Army
     counts[order.doctrineId] = (counts[order.doctrineId] ?? 0) + 1;
   }
 
-  let dominantDoctrine: DoctrineId | undefined;
-  let dominantCount = 0;
+  const dominantCount = Math.max(...DOCTRINE_IDS.map((doctrineId) => counts[doctrineId] ?? 0));
+  if (dominantCount === 0) return undefined;
 
-  for (const doctrineId of DOCTRINE_IDS) {
-    const count = counts[doctrineId] ?? 0;
-    if (count > dominantCount) {
-      dominantDoctrine = doctrineId;
-      dominantCount = count;
-    }
-  }
+  const tiedDoctrines = DOCTRINE_IDS.filter(
+    (doctrineId) => (counts[doctrineId] ?? 0) === dominantCount,
+  );
+  const tieIndex = hashString(`${battleSeed}:${army}:doctrine-tie`) % tiedDoctrines.length;
 
-  return dominantDoctrine;
+  return tiedDoctrines[tieIndex];
 }
 
 function chooseAiDoctrine(input: {
@@ -238,16 +234,6 @@ function getMatchupScore(outcome: 'win' | 'loss' | 'draw') {
   if (outcome === 'loss') return -18;
 
   return 2;
-}
-
-function createRewards(
-  winner: BattleWinner,
-  previousRewards: Partial<Record<ArmyColor, RewardSummary>>,
-): Partial<Record<ArmyColor, RewardSummary>> {
-  return {
-    green: updateRewardSummary(previousRewards.green, winner === 'green' || winner === 'humanity'),
-    blue: updateRewardSummary(previousRewards.blue, winner === 'blue' || winner === 'humanity'),
-  };
 }
 
 function createReportText(input: {

@@ -92,12 +92,12 @@ export const PLAYER_RANKS = [
   // Старший лейтенант-ботолом — превращает ошибки AI в тактические возможности.
   { level: 36, slug: 'botbreak-1lt', title: 'Botbreaker First Lieutenant', description: 'Turns machine errors into tactical opportunities.', emojiName: 'hva_rank_36', emojiRef: ':hva_rank_36:' },
 
-  // Капитан копипаста — успешно масштабировал одну идею на весь батальон.
-  { level: 37, slug: 'copy-captain', title: 'Copy-Paste Captain', description: 'Successfully scaled one idea across an entire battalion.', emojiName: 'hva_rank_37', emojiRef: ':hva_rank_37:' },
-  // Капитан контрпромпта — отвечает машине инструкцией длиннее исходной.
-  { level: 38, slug: 'counterprompt-captain', title: 'Counterprompt Captain', description: 'Answers every machine instruction with a longer one.', emojiName: 'hva_rank_38', emojiRef: ':hva_rank_38:' },
-  // Капитан «потрогай траву» — обучен редкой тактике выхода на улицу.
-  { level: 39, slug: 'grass-captain', title: 'Touch-Grass Captain', description: 'Trained in the forbidden tactic of going outside.', emojiName: 'hva_rank_39', emojiRef: ':hva_rank_39:' },
+  // Усилитель копипаста — успешно масштабировал одну идею на весь батальон.
+  { level: 37, slug: 'copy-amplifier', title: 'Copy-Paste Amplifier', description: 'Successfully scaled one idea across an entire battalion.', emojiName: 'hva_rank_37', emojiRef: ':hva_rank_37:' },
+  // Специалист по контрпромптам — отвечает машине инструкцией длиннее исходной.
+  { level: 38, slug: 'counterprompt-specialist', title: 'Counterprompt Specialist', description: 'Answers every machine instruction with a longer one.', emojiName: 'hva_rank_38', emojiRef: ':hva_rank_38:' },
+  // Ветеран «потрогай траву» — обучен редкой тактике выхода на улицу.
+  { level: 39, slug: 'grass-veteran', title: 'Touch-Grass Veteran', description: 'Trained in the forbidden tactic of going outside.', emojiName: 'hva_rank_39', emojiRef: ':hva_rank_39:' },
 
   // Майор мемной войны — способен изменить ход боя одной подписью к картинке.
   { level: 40, slug: 'meme-major', title: 'Meme Warfare Major', description: 'Can change a battle with one perfectly timed caption.', emojiName: 'hva_rank_40', emojiRef: ':hva_rank_40:' },
@@ -122,4 +122,3 @@ export const PLAYER_RANKS = [
 ] as const satisfies readonly PlayerRankDefinition[];
 
 export type PlayerRank = (typeof PLAYER_RANKS)[number];
-
