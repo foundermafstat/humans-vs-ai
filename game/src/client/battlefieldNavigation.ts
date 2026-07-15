@@ -25,6 +25,28 @@ export type NavigationProjectionOptions = {
   edgeThreshold?: number;
 };
 
+export function getRoundRobinIndex(startIndex: number, offset: number, total: number) {
+  if (total <= 0) return 0;
+  return (startIndex + offset) % total;
+}
+
+export function getNavigationPlanDelay(
+  stalled: boolean,
+  repathDelay: number,
+  retryDelay: number,
+) {
+  return stalled ? retryDelay : repathDelay;
+}
+
+export function prioritizeStalledNavigationPlan(
+  nextPathfindAt: number,
+  now: number,
+  stalled: boolean,
+  retryDelay: number,
+) {
+  return stalled ? Math.min(nextPathfindAt, now + retryDelay) : nextPathfindAt;
+}
+
 type OpenNode = {
   index: number;
   score: number;

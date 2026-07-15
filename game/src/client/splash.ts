@@ -11,6 +11,9 @@ import type {
 import { getBattlefieldLocation, type BattlefieldLocation } from './battlefieldLocations';
 import {
   BattlefieldNavigator,
+  getNavigationPlanDelay,
+  getRoundRobinIndex,
+  prioritizeStalledNavigationPlan,
   projectNavigationObstacles,
   type NavigationPoint as ScreenPoint,
 } from './battlefieldNavigation';
@@ -359,6 +362,7 @@ class SplashBattleScene extends Scene {
   private navigator: BattlefieldNavigator | undefined;
   private navigationPlansThisFrame = 0;
   private targetSearchesThisFrame = 0;
+  private soldierUpdateCursor = 0;
   private navigationResizeTimer: Phaser.Time.TimerEvent | undefined;
 
   constructor() {
@@ -407,12 +411,23 @@ class SplashBattleScene extends Scene {
     const dt = delta / 1000;
     this.navigationPlansThisFrame = 0;
     this.targetSearchesThisFrame = 0;
+    const soldierCount = this.soldiers.length;
+    if (soldierCount === 0) return;
 
-    for (const soldier of this.soldiers) {
+    const startIndex = this.soldierUpdateCursor % soldierCount;
+    for (let offset = 0; offset < soldierCount; offset += 1) {
+      const soldier = this.soldiers[getRoundRobinIndex(startIndex, offset, soldierCount)];
+      if (!soldier) continue;
       if (soldier.state !== 'dead') {
         this.updateSoldier(soldier, time, dt);
       }
     }
+
+    this.soldierUpdateCursor = getRoundRobinIndex(
+      startIndex,
+      MAX_TARGET_SEARCHES_PER_FRAME,
+      soldierCount,
+    );
   }
 
   private handleResize(gameSize: Phaser.Structs.Size) {
@@ -506,6 +521,7 @@ class SplashBattleScene extends Scene {
     if (!target) {
       soldier.state = 'march';
       soldier.container.setDepth(soldier.container.y);
+      this.moveTowardMapCenter(soldier, dt);
       this.holdWeaponLevel(soldier, dt);
       this.playStep(soldier);
       return;
@@ -997,16 +1013,24 @@ class SplashBattleScene extends Scene {
       soldier.lastProgressPoint.y,
     );
     const stalled = now - soldier.lastProgressAt >= NAVIGATION_STUCK_MS && progressDistance < 4;
+    soldier.nextPathfindAt = prioritizeStalledNavigationPlan(
+      soldier.nextPathfindAt,
+      now,
+      stalled,
+      NAVIGATION_RETRY_MS,
+    );
 
     if (
       navigator &&
       this.navigationPlansThisFrame < MAX_NAVIGATION_PLANS_PER_FRAME &&
-      (targetDrift >= NAVIGATION_TARGET_DRIFT || now >= soldier.nextPathfindAt || stalled)
+      (targetDrift >= NAVIGATION_TARGET_DRIFT || now >= soldier.nextPathfindAt)
     ) {
       this.navigationPlansThisFrame += 1;
       soldier.navigationPath = navigator.findPath(from, target);
       soldier.navigationTarget = { ...target };
-      soldier.nextPathfindAt = now + NAVIGATION_REPATH_MS;
+      soldier.nextPathfindAt =
+        now +
+        getNavigationPlanDelay(stalled, NAVIGATION_REPATH_MS, NAVIGATION_RETRY_MS);
       soldier.stuckReplans = stalled ? soldier.stuckReplans + 1 : 0;
 
       if (soldier.navigationPath.length === 0 && soldier.stuckReplans >= 2) {
@@ -1028,7 +1052,10 @@ class SplashBattleScene extends Scene {
 
     let moveTarget = soldier.navigationPath[0];
     if (!moveTarget) {
-      if (navigator && !navigator.isSegmentClear(from, target)) return true;
+      if (navigator && !navigator.isSegmentClear(from, target)) {
+        soldier.nextPathfindAt = Math.min(soldier.nextPathfindAt, now + NAVIGATION_RETRY_MS);
+        return true;
+      }
       moveTarget = target;
     }
 

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {
   BattlefieldNavigator,
+  getNavigationPlanDelay,
+  getRoundRobinIndex,
+  prioritizeStalledNavigationPlan,
   projectNavigationObstacles,
 } from '../dist/types/client/battlefieldNavigation.js';
 
@@ -79,5 +82,41 @@ assert.notDeepEqual(sealedEnd, target, 'unreachable target must not be returned 
 
 const emptyNavigator = new BattlefieldNavigator({ width: 200, height: 200, obstacles: [] });
 assert.deepEqual(emptyNavigator.findPath(start, target), [target], 'open terrain should use a direct route');
+
+const stalledPlanCounts = Array.from({ length: 6 }, () => 0);
+const stalledPlanDeadlines = Array.from({ length: 6 }, () => 0);
+for (const now of [1000, 1016]) {
+  let plansThisFrame = 0;
+  for (let index = 0; index < stalledPlanCounts.length; index += 1) {
+    stalledPlanDeadlines[index] = prioritizeStalledNavigationPlan(
+      stalledPlanDeadlines[index],
+      now,
+      true,
+      140,
+    );
+    if (plansThisFrame >= 5 || now < stalledPlanDeadlines[index]) continue;
+    plansThisFrame += 1;
+    stalledPlanCounts[index] += 1;
+    stalledPlanDeadlines[index] = now + getNavigationPlanDelay(true, 3000, 140);
+  }
+}
+assert.deepEqual(
+  stalledPlanCounts,
+  [1, 1, 1, 1, 1, 1],
+  'stalled units must respect retry delay instead of monopolizing the frame budget',
+);
+
+const targetSearchCounts = Array.from({ length: 33 }, () => 0);
+let targetCursor = 0;
+for (let frame = 0; frame < 2; frame += 1) {
+  for (let offset = 0; offset < 32; offset += 1) {
+    targetSearchCounts[getRoundRobinIndex(targetCursor, offset, targetSearchCounts.length)] += 1;
+  }
+  targetCursor = getRoundRobinIndex(targetCursor, 32, targetSearchCounts.length);
+}
+assert(
+  targetSearchCounts.every((searches) => searches > 0),
+  'round-robin target searches must eventually serve units beyond the per-frame cap',
+);
 
 console.log('navigation verification passed');
