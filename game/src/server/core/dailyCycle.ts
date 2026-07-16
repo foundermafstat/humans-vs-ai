@@ -21,6 +21,7 @@ import type {
   GlobalMapResponse,
   GlobalLeaderboardResponse,
   OrderResponse,
+  PetitionStatusResponse,
   PlayerBattleState,
   PlayerJoinResponse,
   PersonalBattleRewardView,
@@ -231,6 +232,7 @@ type OpenAIResponse = {
 const NEW_YORK_TIME_ZONE = 'America/New_York';
 const CURRENT_BATTLE_KEY = 'app:current_battle';
 const PLAYERS_KEY = 'app:players';
+const EPIC_WAR_PETITION_KEY = 'app:epic_war_petition';
 const TERRITORIES_KEY = 'app:territories';
 const DAILY_EVENTS_KEY = 'app:daily_events';
 const TERRITORY_CAPTURES_KEY = 'app:territory_captures';
@@ -1832,6 +1834,7 @@ function createPlayerBattleState(input: {
   spyOffer?: ActiveSpyAssignment;
   dailyReward?: ProgressionLedgerEntry;
   spySuspicion?: SpySuspicionView;
+  petition?: PetitionStatusResponse;
 }): PlayerBattleState {
   return {
     exists: Boolean(input.player),
@@ -1844,6 +1847,7 @@ function createPlayerBattleState(input: {
     rewards: input.player ? normalizeRewardSummary(input.player.rewards) : undefined,
     dailyReward: toPersonalBattleRewardView(input.dailyReward),
     spySuspicion: input.spySuspicion,
+    petition: input.petition,
     spyAssignment: input.spyOffer
       ? {
         active: true,
@@ -2585,12 +2589,13 @@ export async function getBootstrapResponse(): Promise<BootstrapResponse> {
   const spyOffer = battle ? await getOrCreateSpyOffer(battle, participant) : undefined;
   const dailyReward = battle ? await getProgressionLedgerEntry(battle.id, userId) : undefined;
   const spySuspicion = battle ? await getSpySuspicion(battle.id, userId) : undefined;
+  const petition = player ? await getEpicWarPetitionStatus() : undefined;
   if (player) await retryPendingPlayerFlair(player);
   const response: BootstrapResponse = {
     type: 'bootstrap',
     serverNow: now.toISOString(),
     view: 'promo',
-    user: createPlayerBattleState({ player, participant, order, spyOffer, dailyReward, spySuspicion }),
+    user: createPlayerBattleState({ player, participant, order, spyOffer, dailyReward, spySuspicion, petition }),
   };
 
   if (!battle) return response;
@@ -2614,6 +2619,33 @@ export async function getBootstrapResponse(): Promise<BootstrapResponse> {
 
   response.view = participant ? 'countdown' : 'promo';
   return response;
+}
+
+export async function getEpicWarPetitionStatus(): Promise<PetitionStatusResponse> {
+  const userId = context.userId;
+  if (!userId) throw new Error('Reddit user id is required');
+  const [signatureCount, signedAt] = await Promise.all([
+    redis.hLen(EPIC_WAR_PETITION_KEY),
+    redis.hGet(EPIC_WAR_PETITION_KEY, userId),
+  ]);
+  return {
+    type: 'epic-war-petition',
+    signed: Boolean(signedAt),
+    signatureCount,
+    ...(signedAt ? { signedAt } : {}),
+  };
+}
+
+export async function signEpicWarPetition(): Promise<PetitionStatusResponse> {
+  const userId = context.userId;
+  if (!userId) throw new Error('Reddit user id is required');
+  const player = await getPlayer(userId);
+  if (!player) throw new Error('Register in Humans vs AI before signing the petition');
+  const existing = await redis.hGet(EPIC_WAR_PETITION_KEY, userId);
+  if (!existing) {
+    await redis.hSet(EPIC_WAR_PETITION_KEY, { [userId]: new Date().toISOString() });
+  }
+  return await getEpicWarPetitionStatus();
 }
 
 export async function getGlobalMapResponse(): Promise<GlobalMapResponse> {

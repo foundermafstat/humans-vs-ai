@@ -95,7 +95,7 @@ assert(
 );
 assert(
   gameSource.includes('openDoctrineCodex()') &&
-    gameSource.includes('/assets/doctrine-counters-pixel.png'),
+    gameSource.includes('/assets/doctrine-counters-pixel.webp'),
   'the seven-doctrine codex must be accessible from the battle interface',
 );
 assert(
@@ -104,6 +104,20 @@ assert(
     apiRouteSource.includes("api.get('/leaderboard/global'") &&
     gameSource.includes('renderGlobalLeaderboard()'),
   'career progression must have an accessible global leaderboard',
+);
+assert(
+  sharedSource.includes('type PetitionStatusResponse') &&
+    dailyCycleSource.includes('signEpicWarPetition()') &&
+    dailyCycleSource.includes('EPIC_WAR_PETITION_KEY') &&
+    apiRouteSource.includes("api.post('/petition/epic-war/sign'") &&
+    gameSource.includes('createWarDesk(') &&
+    gameSource.includes("this.load.image('war-form-blank'") &&
+    gameSource.includes("this.load.image('trigger-doctrine'") &&
+    gameSource.includes('/assets/doctrine-counters-pixel.webp') &&
+    existsSync(resolve(root, 'public/assets/trigger-doctrine-tablet.png')) &&
+    existsSync(resolve(root, 'public/assets/trigger-spy-scanner.png')) &&
+    existsSync(resolve(root, 'public/assets/trigger-petition-pad.png')),
+  'the independent petition must use a registered-player signature and responsive Phaser war desk',
 );
 assert(resolverSource.includes('getDoctrineMatchup'), 'resolver does not use doctrine matchups');
 assert(resolverSource.includes('getDominantDoctrine'), 'resolver does not choose dominant doctrine');

@@ -112,6 +112,14 @@ export type PlayerBattleState = {
   rewards?: RewardSummary;
   dailyReward?: PersonalBattleRewardView;
   spySuspicion?: SpySuspicionView;
+  petition?: PetitionStatusResponse;
+};
+
+export type PetitionStatusResponse = {
+  type: "epic-war-petition";
+  signed: boolean;
+  signatureCount: number;
+  signedAt?: string;
 };
 
 export type OrderResponse = {

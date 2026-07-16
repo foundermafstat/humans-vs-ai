@@ -17,6 +17,7 @@ import type {
   IncrementResponse,
   InitResponse,
   OrderResponse,
+  PetitionStatusResponse,
   PlayerJoinResponse,
   PublicPlayerProfileResponse,
   PublicBattleResultResponse,
@@ -34,10 +35,12 @@ import {
   getGlobalMapResponse,
   getGlobalLeaderboard,
   joinCurrentPlayer,
+  getEpicWarPetitionStatus,
   postAiStatusReport,
   postDivisionCommentAnalysis,
   syncCurrentPlayerFlair,
   submitDoctrineOrder,
+  signEpicWarPetition,
 } from '../core/dailyCycle';
 
 type ErrorResponse = {
@@ -299,6 +302,28 @@ api.get('/leaderboard/global', async (c) => {
     return c.json<ErrorResponse>({
       status: 'error',
       message: error instanceof Error ? error.message : 'Failed to load global leaderboard',
+    }, 400);
+  }
+});
+
+api.get('/petition/epic-war', async (c) => {
+  try {
+    return c.json<PetitionStatusResponse>(await getEpicWarPetitionStatus());
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to load petition',
+    }, 400);
+  }
+});
+
+api.post('/petition/epic-war/sign', async (c) => {
+  try {
+    return c.json<PetitionStatusResponse>(await signEpicWarPetition());
+  } catch (error) {
+    return c.json<ErrorResponse>({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Failed to sign petition',
     }, 400);
   }
 });

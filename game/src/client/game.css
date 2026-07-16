@@ -4,6 +4,13 @@ body {
   font-family: "VT323", monospace;
   color: rgba(255, 255, 255, 0.87);
   background-color: #0f0f0f;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 :root {
@@ -27,6 +34,18 @@ body {
 #game-container {
   width: 100%;
   height: 100%;
+}
+
+body.war-desk-active,
+body.war-desk-active #app {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.war-desk-active .global-map-toggle {
+  display: none;
 }
 
 .game-state-screen {
@@ -61,12 +80,49 @@ body {
   overflow-y: auto;
 }
 
+.game-state-screen--desk {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: #151a1d;
+}
+
+.game-state-screen__panel--desk {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #151a1d;
+  box-shadow: none;
+}
+
+.game-state-screen__panel--desk .war-desk {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background-size: 100% auto;
+}
+
+.game-state-screen__panel--desk .war-desk__triggers {
+  width: 100vw;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
 .command-briefing {
   display: grid;
   grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1.2fr);
   overflow: hidden;
-  border: 2px solid #6f6249;
-  background: #17130f;
+  border: 2px solid #75643f;
+  background: #f1ead8;
+  color: #2d1c11;
 }
 
 .command-briefing__image {
@@ -83,13 +139,14 @@ body {
 
 .command-briefing__eyebrow {
   margin: 0;
-  color: #d7c175;
+  color: #74531f;
   letter-spacing: 0.08em;
 }
 
 .command-briefing__title {
   margin: 0.25rem 0;
   font-size: 2rem;
+  color: #23160d;
 }
 
 .command-briefing__actions {
@@ -97,6 +154,607 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.65rem;
+}
+
+.war-desk {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 34rem;
+  overflow: hidden;
+  border: 3px solid #39434a;
+  background-color: #151a1d;
+  background-image: url("/assets/tactical-desk/desk-neutral.webp");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  box-shadow: inset 0 0 3rem #000, 0 0.75rem 2rem rgb(0 0 0 / 45%);
+}
+
+.war-desk__timer {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  z-index: 3;
+  width: 26%;
+  aspect-ratio: 3 / 1;
+  transform: translateX(-50%);
+  pointer-events: none;
+  filter: drop-shadow(0.45rem 0.55rem 0.25rem rgb(0 0 0 / 55%));
+}
+
+.war-desk__timer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.war-desk__timer-value {
+  position: absolute;
+  inset: 29% 22% 31%;
+  display: grid;
+  place-items: center;
+  color: #f4cc62;
+  font: clamp(1rem, 2.2vw, 2.25rem)/1 "VT323", monospace;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 0.45rem rgb(244 204 98 / 42%);
+  white-space: nowrap;
+}
+
+.war-desk__phaser {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+
+.war-desk__phaser canvas {
+  width: 100% !important;
+  height: 100% !important;
+  image-rendering: pixelated;
+}
+
+.war-desk__triggers {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 100vw;
+  aspect-ratio: 4 / 3;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.war-desk__trigger {
+  position: absolute;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  color: #dffaff;
+  cursor: pointer;
+  font: 1rem "VT323", monospace;
+  pointer-events: auto;
+  opacity: 1;
+  filter: drop-shadow(0.45rem 0.55rem 0.25rem rgb(0 0 0 / 55%));
+  animation: none;
+  image-rendering: pixelated;
+  transform: rotate(var(--object-angle, 0deg));
+}
+
+.war-desk__trigger:focus-visible,
+.war-desk__trigger[aria-pressed="true"] {
+  outline: 0;
+  filter: drop-shadow(0.45rem 0.55rem 0.25rem rgb(0 0 0 / 55%)) brightness(1.14);
+}
+
+.war-desk__trigger img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.war-desk__trigger:hover img,
+.war-desk__trigger:focus-visible img,
+.war-desk__trigger[aria-pressed="true"] img {
+  filter: drop-shadow(0 0 0.28rem #f2ad3f) drop-shadow(0 0 0.65rem rgb(242 173 63 / 55%));
+}
+
+.war-desk__trigger-label {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  width: max-content;
+  max-width: 92%;
+  padding: 0.16em 0.42em 0.12em;
+  border: 1px solid #6f451f;
+  border-radius: 2px;
+  background: #2b170d;
+  box-shadow: 0 2px 0 #120904, 0 0 0.35rem rgb(0 0 0 / 45%);
+  color: #f2ad3f;
+  font-size: clamp(0.7rem, 1.15vw, 1.25rem);
+  line-height: 0.9;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: 0 1px 0 #000;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@keyframes war-desk-trigger-pulse {
+  from { opacity: 0.2; }
+  to { opacity: 0.72; }
+}
+
+.war-desk__trigger::after {
+  content: "";
+  position: absolute;
+  right: 8%;
+  bottom: 8%;
+  width: clamp(5px, 0.7vw, 10px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #65e7ff;
+  box-shadow: 0 0 0.55rem #35c9f2;
+  animation: war-desk-trigger-pulse 900ms ease-in-out infinite alternate;
+}
+
+.war-desk__trigger--tablet { --object-angle: -2deg; top: 36%; left: 41%; width: 16%; aspect-ratio: 1062 / 737; }
+.war-desk__trigger--radio { top: 27%; left: 8%; width: 11%; aspect-ratio: 620 / 1186; }
+.war-desk__trigger--headset { right: 8%; bottom: 15%; width: 18%; aspect-ratio: 1130 / 757; }
+.war-desk__trigger--briefing { top: 19%; right: 8%; width: 20%; height: 18%; }
+.war-desk__trigger--map { top: 65%; bottom: auto; left: 8%; width: 20%; aspect-ratio: 1200 / 817; }
+.war-desk__trigger--profile { --object-angle: 5deg; bottom: 16%; left: 39%; width: 7%; aspect-ratio: 48 / 58; }
+.war-desk__trigger--leaderboard { --object-angle: -4deg; right: 38%; bottom: 16%; width: 12%; aspect-ratio: 697 / 222; }
+.war-desk__trigger--report { --object-angle: -3deg; top: 52%; left: 58%; width: 14%; aspect-ratio: 2 / 3; }
+
+.war-desk[data-army="neutral"] .war-desk__trigger--report { aspect-ratio: 806 / 1141; }
+.war-desk[data-army="green"] .war-desk__trigger--report { aspect-ratio: 818 / 1306; }
+.war-desk[data-army="blue"] .war-desk__trigger--report { aspect-ratio: 900 / 1319; }
+
+.war-desk__trigger--leaderboard img {
+  object-fit: contain;
+}
+
+.war-desk__sheets {
+  box-sizing: border-box;
+  display: grid;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.war-desk__sheet {
+  box-sizing: border-box;
+  display: none;
+  position: relative;
+  width: min(98vw, calc(98dvh * 806 / 1155));
+  height: min(98dvh, calc(98vw * 1155 / 806));
+  aspect-ratio: 806 / 1155;
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  color: #2d1c11;
+  filter: drop-shadow(0 0.65rem 0.45rem rgb(0 0 0 / 48%));
+  text-shadow: none;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+.game-state-screen__panel--desk .war-desk__sheets {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  padding: 0;
+  place-items: center;
+  background: transparent;
+}
+
+.game-state-screen__panel--desk .war-desk[data-form-open="true"] .war-desk__sheets {
+  background: rgb(5 10 12 / 24%);
+}
+
+.game-state-screen__panel--desk .war-desk__sheet {
+  width: min(98vw, calc(98dvh * 806 / 1155));
+  max-width: none;
+  height: min(98dvh, calc(98vw * 1155 / 806));
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  background-color: transparent;
+}
+
+.war-desk__sheet--landscape,
+.game-state-screen__panel--desk .war-desk__sheet--landscape {
+  width: min(98vw, calc(90dvh * 1568 / 1003));
+  height: min(90dvh, calc(98vw * 1003 / 1568));
+  aspect-ratio: 1568 / 1003;
+}
+
+.war-desk__sheet--landscape .war-desk__sheet-content {
+  top: 18%;
+  right: 18%;
+  bottom: 17%;
+  left: 18%;
+}
+
+.war-desk__sheet--landscape .war-desk__close {
+  top: 8%;
+  right: 8%;
+}
+
+.war-desk__sheet-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  user-select: none;
+}
+
+.war-desk__sheet-content {
+  position: absolute;
+  top: 13%;
+  right: 7%;
+  bottom: 6%;
+  left: 7%;
+  z-index: 1;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #536269 transparent;
+}
+
+.war-desk[data-army="green"] .war-desk__sheet:not(.war-desk__sheet--landscape) .war-desk__sheet-content {
+  top: 16%;
+  right: 18.5%;
+  bottom: 9%;
+  left: 18.5%;
+}
+
+.war-desk[data-army="blue"] .war-desk__sheet:not(.war-desk__sheet--landscape) .war-desk__sheet-content {
+  top: 15%;
+  right: 14.5%;
+  bottom: 8%;
+  left: 14.5%;
+}
+
+.war-desk__sheet-content > *,
+.war-desk__sheet-content img,
+.war-desk__sheet-content button,
+.war-desk__sheet-content a,
+.war-desk__sheet-content select,
+.war-desk__sheet-content textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.war-desk__sheet-content .game-state-screen__button,
+.war-desk__sheet-content button,
+.war-desk__sheet-content a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.war-desk__sheet-content .command-briefing__actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.war-desk__sheet-content p,
+.war-desk__sheet-content h1,
+.war-desk__sheet-content h2,
+.war-desk__sheet-content dd,
+.war-desk__sheet-content dt {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.war-desk__sheet[data-active="true"] {
+  display: block;
+  animation: war-desk-form-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.war-desk__close {
+  position: absolute;
+  top: 3%;
+  right: 2%;
+  z-index: 2;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid #641b18;
+  border-radius: 3px;
+  background: #b82f28;
+  color: #ffffff;
+  cursor: pointer;
+  font: 1.5rem/1 "VT323", monospace;
+  box-shadow: 0 3px 0 #52110f, 0 0 0.45rem rgb(0 0 0 / 35%);
+  text-shadow: 0 2px 0 #681713;
+}
+
+.war-desk__close:hover,
+.war-desk__close:focus-visible {
+  background: #dc4438;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.war-desk[data-army="green"] .war-desk__sheet:not(.war-desk__sheet--landscape) .war-desk__close {
+  top: 6%;
+  right: 13%;
+}
+
+.war-desk[data-army="blue"] .war-desk__sheet:not(.war-desk__sheet--landscape) .war-desk__close {
+  top: 5%;
+  right: 10%;
+}
+
+.war-desk__doctrine-counters {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto 1rem;
+  border: 2px solid #263b45;
+  image-rendering: pixelated;
+}
+
+.war-desk__sheet-content .command-briefing {
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+.war-desk__sheet-content .command-briefing__image {
+  height: auto;
+  min-height: 0;
+  max-height: 42vh;
+  object-fit: cover;
+}
+
+.war-desk__sheet-content .command-briefing > div {
+  min-width: 0;
+  padding: 0.65rem 0.35rem;
+}
+
+.war-desk__sheet-content .command-briefing__actions,
+.war-desk__sheet-content .game-state-screen__button,
+.war-desk__sheet-content .game-state-screen__select {
+  max-width: 100%;
+}
+
+.war-desk__sheet-content .daily-reward {
+  grid-template-columns: 4rem minmax(0, 1fr);
+  width: 100%;
+}
+
+.war-desk__sheet .game-state-screen__body,
+.war-desk__sheet .game-state-screen__meta,
+.war-desk__sheet .game-state-screen__comment-label {
+  color: #3d2817;
+  font-size: 1rem;
+  text-shadow: none;
+}
+
+.war-desk__sheet .game-state-screen__title,
+.war-desk__sheet .daily-leaderboard__title {
+  margin: 0 0 0.75rem;
+  color: #2d1c11;
+  font-size: clamp(1.45rem, 4vw, 2.35rem);
+  line-height: 0.95;
+  text-shadow: none;
+}
+
+.war-desk__sheet .game-state-screen__button {
+  font-size: 1rem;
+}
+
+.war-desk__sheet .daily-leaderboard__viewport,
+.war-desk__sheet .battle-detail__viewport {
+  border-color: #75643f;
+  background: #f6efdf;
+}
+
+.war-desk__sheet .daily-leaderboard__table,
+.war-desk__sheet .battle-detail__scores {
+  background: #f6efdf;
+  color: #2d1c11;
+}
+
+.war-desk__sheet .daily-leaderboard__table th,
+.war-desk__sheet .battle-detail__scores th {
+  background: #3a2414;
+  color: #f2ad3f;
+}
+
+.war-desk__sheet .daily-leaderboard__table td,
+.war-desk__sheet .battle-detail__scores td {
+  border-color: #c3ae82;
+}
+
+.war-desk__sheet .daily-leaderboard__table a,
+.war-desk__sheet .player-profile__battles a,
+.war-desk__sheet .game-state-screen__war-room-link {
+  color: #70441d;
+  font-weight: 700;
+}
+
+.war-desk__sheet .daily-leaderboard__row--current {
+  background: #f5d98d;
+  outline-color: #9a6b22;
+}
+
+.war-desk__sheet .player-profile__rank {
+  width: 5rem;
+  height: 5rem;
+  margin: 0 auto;
+}
+
+.war-desk__sheet .player-profile__rank-title,
+.war-desk__sheet .player-profile__section-title,
+.war-desk__sheet .daily-leaderboard__current-summary,
+.war-desk__sheet .battle-detail__winner {
+  color: #70441d;
+  text-shadow: none;
+}
+
+.war-desk__sheet .player-profile__medals li {
+  border-color: #9b7a43;
+  background: #eee2c8;
+  color: #2d1c11;
+}
+
+.war-desk__sheet .player-profile__medal small {
+  color: #604b35;
+}
+
+.war-desk__sheet .daily-reward {
+  border-color: #9b7a43;
+  background: #eee2c8;
+  color: #2d1c11;
+}
+
+.war-desk__sheet .command-briefing .game-state-screen__meta {
+  color: #4b3524;
+  text-shadow: none;
+}
+
+.war-desk__form-title {
+  margin: 0 0 0.7rem;
+  color: #18252c;
+  line-height: 0.95;
+  text-align: center;
+}
+
+.war-desk__form-copy,
+.war-desk__petition-count {
+  color: #18252c;
+  font-size: 1.05rem;
+  line-height: 1.05;
+  text-align: center;
+}
+
+@media (max-width: 680px) {
+  .game-state-screen--desk,
+  .game-state-screen--desk .game-state-screen__panel--desk {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .game-state-screen__panel--desk .war-desk {
+    min-height: 0;
+    background-size: auto 100%;
+  }
+
+  .war-desk__timer {
+    top: 56%;
+    width: 38%;
+  }
+
+  .war-desk__timer-value {
+    font-size: clamp(0.9rem, 5vw, 1.45rem);
+  }
+
+  .game-state-screen__panel--desk .war-desk__triggers {
+    width: calc(100dvh * 4 / 3);
+    height: 100dvh;
+  }
+
+  .war-desk__trigger--radio img,
+  .war-desk__trigger--headset img,
+  .war-desk__trigger--briefing img,
+  .war-desk__trigger--map img {
+    opacity: 1;
+  }
+
+  .war-desk__trigger--tablet { --object-angle: -3deg; top: 31%; left: 42%; width: 16%; height: auto; }
+  .war-desk__trigger--radio { --object-angle: 2deg; top: 31%; left: 61%; width: 9%; height: auto; }
+  .war-desk__trigger--headset { --object-angle: -2deg; right: auto; bottom: 14%; left: 43%; width: 15%; height: auto; }
+  .war-desk__trigger--briefing { --object-angle: -4deg; top: 16%; right: auto; left: 34%; width: 14%; height: 12%; }
+  .war-desk__trigger--map { --object-angle: 3deg; top: 16%; right: auto; bottom: auto; left: 58%; width: 14%; height: auto; }
+  .war-desk__trigger--profile { --object-angle: 5deg; bottom: 14%; left: 27%; width: 6%; height: auto; }
+  .war-desk__trigger--leaderboard { --object-angle: -4deg; right: auto; bottom: 14%; left: 35%; width: 8%; height: auto; }
+  .war-desk__trigger--report { --object-angle: -3deg; top: 69%; left: 60%; width: 11%; height: auto; }
+
+  .war-desk__trigger-label {
+    font-size: clamp(0.62rem, 2.7vw, 0.9rem);
+  }
+
+  .war-desk__trigger--briefing img {
+    border: 2px solid #20282c;
+    object-fit: cover;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 10%);
+  }
+
+  .war-desk {
+    min-height: 39rem;
+    background-size: contain;
+  }
+
+  .war-desk__sheets {
+    padding: 0;
+  }
+
+  .war-desk__sheet {
+    width: min(99vw, calc(99dvh * 806 / 1155));
+    height: min(99dvh, calc(99vw * 1155 / 806));
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    max-width: none;
+  }
+
+  .game-state-screen__panel--desk .war-desk__sheet {
+    width: min(99vw, calc(99dvh * 806 / 1155));
+    height: min(99dvh, calc(99vw * 1155 / 806));
+    min-height: 0;
+    max-height: none;
+    padding: 0;
+  }
+
+  .war-desk__sheet--landscape,
+  .game-state-screen__panel--desk .war-desk__sheet--landscape {
+    width: 99vw;
+    height: min(82dvh, calc(99vw * 1003 / 1568));
+  }
+
+
+  .war-desk__close {
+    top: 3%;
+    right: 2%;
+  }
+
+}
+
+@keyframes war-desk-form-in {
+  from { opacity: 0; transform: translateY(-1.5rem) rotate(-2deg) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .war-desk__sheet[data-active="true"] { animation: none; }
+  .war-desk__trigger { animation: none; }
 }
 
 @media (max-width: 640px) {
@@ -244,6 +902,93 @@ body {
   }
 }
 
+@media (max-width: 680px) {
+  html,
+  body,
+  #app,
+  .game-state-screen,
+  .game-state-screen__panel {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .game-state-screen {
+    display: block;
+    padding: 0;
+    overflow-y: auto;
+  }
+
+  .game-state-screen__panel,
+  .game-state-screen__panel--command,
+  .global-leaderboard {
+    width: 100%;
+    max-height: none;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .game-state-screen--desk {
+    display: block;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .game-state-screen--desk .game-state-screen__panel--desk {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .daily-leaderboard__viewport,
+  .battle-detail__viewport {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .daily-leaderboard__table,
+  .battle-detail__scores {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .daily-leaderboard__table thead,
+  .battle-detail__scores thead {
+    display: none;
+  }
+
+  .daily-leaderboard__table tbody,
+  .battle-detail__scores tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .daily-leaderboard__table tr,
+  .battle-detail__scores tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid #6f6249;
+  }
+
+  .daily-leaderboard__table td,
+  .battle-detail__scores td {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .game-state-screen__comment-select,
+  .game-state-screen__comment-search,
+  .game-state-screen__button,
+  img,
+  table {
+    max-width: 100%;
+  }
+}
+
 .daily-leaderboard {
   width: min(100%, 62rem);
   margin: 1.5rem auto 0;
@@ -368,13 +1113,29 @@ body {
   width: min(100%, 48rem);
   margin: 1.5rem auto 0;
   padding: 1rem;
-  border: 2px solid #7b3341;
-  background: rgb(38 13 18 / 82%);
+  border: 2px solid #8b3b43;
+  background: #f2e3dc;
+  color: #321b18;
+  text-shadow: none;
 }
 
 .counterintelligence__title {
   margin-top: 0;
-  color: #f0a7b4;
+  color: #7b2631;
+  text-shadow: none;
+}
+
+.counterintelligence .game-state-screen__meta,
+.counterintelligence .game-state-screen__body,
+.counterintelligence .game-state-screen__comment-label {
+  color: #321b18;
+  text-shadow: none;
+}
+
+.counterintelligence .game-state-screen__comment-select {
+  border-color: #8b3b43;
+  background: #fffaf0;
+  color: #27150f;
 }
 
 .battle-detail__winner {
@@ -518,6 +1279,10 @@ body {
   box-shadow: 0 4px 0 #6d3a18, 0 8px 22px rgba(0, 0, 0, 0.32);
 }
 
+.global-map-toggle[hidden] {
+  display: none;
+}
+
 .global-map-toggle:hover {
   background: #ffe08c;
 }
@@ -602,19 +1367,73 @@ body {
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
-  border: 1px solid rgba(242, 195, 91, 0.6);
+  border: 2px solid #641b18;
   border-radius: 4px;
-  background: #211b12;
-  color: var(--map-ink);
+  background: #b82f28;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-size: 38px;
   line-height: 0.8;
+  box-shadow: 0 3px 0 #52110f;
+  text-shadow: 0 2px 0 #681713;
 }
 
 .global-map-dialog__close:hover {
-  border-color: var(--map-brass);
+  border-color: #ffffff;
+  background: #dc4438;
   color: #ffffff;
+}
+
+.war-desk__sheet-content > .global-map-dialog--embedded {
+  position: relative;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #17130f;
+  box-shadow: none;
+}
+
+.global-map-dialog--embedded::backdrop {
+  display: none;
+}
+
+.global-map-dialog--embedded .global-map-dialog__shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.global-map-dialog--embedded .global-map-dialog__header {
+  padding: 8px 10px 6px;
+}
+
+.global-map-dialog--embedded .global-map-dialog__header h1 {
+  font-size: clamp(1.35rem, 3vw, 2.2rem);
+}
+
+.global-map-dialog--embedded .global-map-dialog__eyebrow,
+.global-map-dialog--embedded .global-map-dialog__status {
+  font-size: clamp(0.8rem, 1.5vw, 1rem);
+}
+
+.global-map-dialog--embedded .global-map-dialog__close {
+  display: none;
+}
+
+.global-map-dialog--embedded .global-map-dialog__body {
+  grid-template-columns: minmax(0, 1.55fr) minmax(12rem, 0.65fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.global-map-dialog--embedded .global-map-overview,
+.global-map-dialog--embedded .global-map-history {
+  padding: 8px;
 }
 
 .global-map-dialog__status {
@@ -697,6 +1516,7 @@ body {
 }
 
 .global-map-cell {
+  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-gray.png');
   position: relative;
   display: flex;
   min-width: 0;
@@ -709,23 +1529,36 @@ body {
   cursor: pointer;
   font: inherit;
   text-shadow: 0 2px 2px #000000;
+  background: rgba(10, 13, 12, 0.08);
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .global-map-cell--green {
-  background: rgba(27, 125, 58, 0.34);
+  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-green.png');
 }
 
 .global-map-cell--blue {
-  background: rgba(32, 84, 169, 0.37);
+  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-blue.png');
 }
 
 .global-map-cell--ai {
-  background: rgba(154, 35, 35, 0.4);
+  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-red.png');
 }
 
 .global-map-cell--contested {
-  background: rgba(45, 39, 30, 0.22);
+  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-gray.png');
+}
+
+.global-map-cell__control-texture {
+  position: absolute;
+  inset: 0;
+  background-image: var(--territory-control-texture);
+  background-position: 0 0;
+  background-repeat: repeat;
+  background-size: 100% 100%;
+  content: "";
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
 .global-map-cell:hover,
@@ -1026,5 +1859,17 @@ body {
 
   .game-state-screen__doctrines {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .daily-leaderboard__viewport,
+  .battle-detail__viewport {
+    overflow-x: hidden;
+  }
+
+  .daily-leaderboard__table,
+  .battle-detail__scores {
+    min-width: 0;
   }
 }

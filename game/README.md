@@ -1,81 +1,64 @@
-## Humans vs AI
+# Humans vs AI — Devvit application
 
-Reddit-native social strategy game built with Devvit Web, Phaser, Hono, Redis, and TypeScript.
+This directory contains the playable Reddit/Devvit implementation of **Humans vs AI**.
 
-The game turns a Reddit post into a daily war room: players join Green or Blue, submit a hidden doctrine order, coordinate in public comments, and fight an AI opponent that reacts to the public signal.
+For the complete game description, daily loop, seven doctrines, scoring model, spies, campaign, progression, implementation status, and roadmap, read the [project README](../README.md).
 
-## Core Game Loop
+## Runtime map
 
-The target MVP loop is:
+- `src/client/splash.html` — lightweight inline Reddit post entrypoint;
+- `src/client/game.html` — expanded tactical desk entrypoint;
+- `src/client/game.ts` — forms, map, profiles, leaderboards, reports, and desk interactions;
+- `src/server/index.ts` — Hono/Devvit server entrypoint;
+- `src/server/routes/api.ts` — contextual game API;
+- `src/server/core/dailyCycle.ts` — daily post, participation, orders, resolution, and persistence;
+- `src/server/core/doctrines.ts` — authoritative seven-doctrine matrix;
+- `src/server/core/resolver.ts` — deterministic battle scoring;
+- `src/server/core/territories.ts` — persistent 30-sector campaign;
+- `src/server/core/playerProgressionRules.ts` — XP and 48-rank progression model;
+- `src/shared/api.ts` — shared client/server contracts;
+- `devvit.json` — entrypoints, permissions, settings, triggers, and scheduler tasks.
 
-```txt
-daily battle
--> request participation and receive an immediate balanced assignment
--> receive a temporary army flair (or cover flair for a spy)
--> choose one hidden doctrine from the 7-doctrine system
--> coordinate or misdirect in war-room comments
--> aggregate comment signals
--> AI awareness / counter-pick
--> spy influence
--> doctrine-based battle resolution
--> territory and progression update
--> battle report and rewards
--> reset temporary flair to neutral gray
+## Requirements
+
+- Node.js `>=22.2.0`;
+- npm;
+- Reddit Devvit access and CLI authentication;
+- a test subreddit;
+- optional `openai_api_key` app setting for generated narrative features.
+
+## Local playtest
+
+```bash
+npm ci
+npm run login
+npm run dev
 ```
 
-Green and Blue have no captain or command hierarchy. Every participant has one
-equal-weight doctrine order; deterministic battle-seed hashing resolves an
-internal tie. Spy is the only special role: the order counts for the true army,
-while the public flair shows the opposing cover army.
+`npm run dev` invokes `devvit playtest` against the subreddit configured in `devvit.json`.
 
-Each Daily Post starts with exactly three app comments: pinned AI Responses,
-Green HQ, and Blue HQ. There is no distribution/index comment.
+## Verification
 
-Canonical daily-cycle rules: `../docs/daily_event_cycle_ru.md`.
+```bash
+npm run type-check
+npm run lint
+npm run test:battlefields
+npm run test:navigation
+npm run build
+```
 
-## Doctrine System
+`npm run test:core` is currently a legacy harness: it still references a removed design document and pre-WebP trigger assets. Update those assertions before using it as a release gate.
 
-The authoritative doctrine set contains exactly seven doctrines:
+## Release commands
 
-- `STRIKE`
-- `HACK`
-- `VIRUS`
-- `PHANTOM`
-- `SHIELD`
-- `OVERLOAD`
-- `TRAP`
+```bash
+npm run deploy
+npm run launch
+```
 
-Source of truth:
+- `deploy` runs type checking and linting, then uploads the Devvit app.
+- `launch` uploads and invokes the Devvit publish flow.
 
-- shared contract: `src/shared/api.ts`
-- matchup implementation: `src/server/core/doctrines.ts`
+## License
 
-Older 3-doctrine notes are historical context only and are not the target gameplay model.
-
-## Current Runtime Shape
-
-- Inline post entrypoint: `src/client/splash.html`
-- Expanded game entrypoint: `src/client/game.html`
-- Server entrypoint: `src/server/index.ts`
-- Daily battle lifecycle: `src/server/core/dailyCycle.ts`
-- Reddit/Devvit config: `devvit.json`
-
-## Commands
-
-Requires Node.js `>=22.2.0`.
-
-- `npm run dev`: run Devvit playtest.
-- `npm run build`: build client and server.
-- `npm run type-check`: run TypeScript project checks.
-- `npm run lint`: run ESLint.
-- `npm run deploy`: type-check, lint, then upload to Devvit.
-- `npm run launch`: deploy and publish for review.
-- `npm run login`: log into the Devvit CLI.
-
-## Submission Checklist
-
-- Confirm the app runs in the test subreddit.
-- Create or verify a daily battle post.
-- Show inline splash, expanded game, join flow, doctrine order, comments, resolve, and battle report.
-- Keep dev-only buttons/endpoints out of the public demo path or label them clearly as developer tools.
-- Update the root submission text and demo video around the 7-doctrine mechanic.
+[BSD 3-Clause](LICENSE)

@@ -19,6 +19,7 @@ import {
   type GlobalMapResponse,
   type GlobalMapTerritoryView,
   type OrderResponse,
+  type PetitionStatusResponse,
   type PlayerJoinResponse,
   type PublicPlayerProfileResponse,
   type PublicBattleResultResponse,
@@ -49,6 +50,7 @@ const StartGame = (parent: string) => {
 };
 
 let activeGame: Game | undefined;
+let warDeskGame: Game | undefined;
 let stateScreenElement: HTMLElement | undefined;
 let globalMapElements: GlobalMapElements | undefined;
 type GlobalMapSnapshot = GlobalMapResponse & {
@@ -67,6 +69,8 @@ let selectedGlobalMapTerritoryId: string | undefined;
 let globalMapReturnFocus: HTMLElement | undefined;
 let globalMapLoadVersion = 0;
 let pausedGlobalMapScenes: Phaser.Scene[] = [];
+let openDeskBattleReport: ((battleId: string) => void) | undefined;
+let openDeskPlayerProfile: ((username: string) => void) | undefined;
 
 type GlobalMapElements = {
   toggle: HTMLButtonElement;
@@ -289,6 +293,11 @@ function renderGlobalMapHistory(territory: GlobalMapTerritoryView) {
     detailLink.className = 'global-map-history__link';
     detailLink.href = detailUrl.toString();
     detailLink.textContent = 'View battle details';
+    detailLink.addEventListener('click', (event) => {
+      if (!openDeskBattleReport) return;
+      event.preventDefault();
+      openDeskBattleReport(record.battleId);
+    });
     item.append(detailLink);
 
     elements.historyList.append(item);
@@ -347,6 +356,11 @@ function createGlobalMapCell(
     isNext ? 'Next objective' : '',
   ].filter(Boolean).join(' · ');
   if (isActive) cell.setAttribute('aria-current', 'location');
+
+  const controlTexture = document.createElement('span');
+  controlTexture.className = 'global-map-cell__control-texture';
+  controlTexture.setAttribute('aria-hidden', 'true');
+  cell.append(controlTexture);
 
   const coordinate = document.createElement('span');
   coordinate.className = 'global-map-cell__coordinate';
@@ -512,16 +526,18 @@ function setupGlobalMap() {
   });
 }
 
-function formatDuration(totalSeconds: number) {
-  const seconds = Math.max(0, totalSeconds);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = seconds % 60;
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-}
-
 function clearStateScreen() {
+  warDeskGame?.destroy(true);
+  warDeskGame = undefined;
+  openDeskBattleReport = undefined;
+  openDeskPlayerProfile = undefined;
+  const embeddedMap = globalMapElements?.dialog;
+  if (embeddedMap?.classList.contains('global-map-dialog--embedded')) {
+    embeddedMap.classList.remove('global-map-dialog--embedded');
+    embeddedMap.removeAttribute('open');
+    document.body.append(embeddedMap);
+  }
+  document.body.classList.remove('war-desk-active');
   stateScreenElement?.remove();
   stateScreenElement = undefined;
 }
@@ -575,7 +591,7 @@ function openDoctrineCodex() {
   const close = createActionButton('Close', () => dialog.close());
   header.append(title, close);
   const image = document.createElement('img');
-  image.src = '/assets/doctrine-counters-pixel.png';
+  image.src = '/assets/doctrine-counters-pixel.webp';
   image.alt = 'Seven doctrine matchup matrix: every doctrine has three wins and three losses';
   dialog.append(header, image);
   document.body.append(dialog);
@@ -658,14 +674,13 @@ async function submitDoctrineOrder(
 }
 
 async function renderOrderComposer(panel: HTMLElement) {
+  panel.id = 'war-desk-doctrine-form';
   appendText(
     panel,
     'p',
     'game-state-screen__body',
     'Choose a teammate comment, then choose one hidden doctrine. Your order cannot be changed.',
   );
-  const codexButton = createActionButton('Open Doctrine Codex', openDoctrineCodex);
-  panel.append(codexButton);
   const status = appendText(panel, 'p', 'game-state-screen__meta', 'Loading teammate comments…');
 
   try {
@@ -819,6 +834,11 @@ function createLeaderboardRow(entry: DailyLeaderboardEntry) {
   profileUrl.searchParams.set('profile', entry.username);
   profileLink.href = profileUrl.toString();
   profileLink.textContent = `u/${entry.username}`;
+  profileLink.addEventListener('click', (event) => {
+    if (!openDeskPlayerProfile) return;
+    event.preventDefault();
+    openDeskPlayerProfile(entry.username);
+  });
   player.append(profileLink);
   row.append(position, player);
   for (const value of values.slice(1)) {
@@ -918,7 +938,7 @@ async function renderDailyLeaderboard(panel: HTMLElement, battleId: string) {
   }
 }
 
-function createGlobalLeaderboardRow(entry: GlobalLeaderboardEntry) {
+function createGlobalLeaderboardRow(entry: GlobalLeaderboardEntry, openProfile?: (username: string) => void) {
   const row = document.createElement('tr');
   if (entry.isCurrentUser) row.className = 'daily-leaderboard__row--current';
   const position = document.createElement('td');
@@ -930,6 +950,12 @@ function createGlobalLeaderboardRow(entry: GlobalLeaderboardEntry) {
   profileUrl.searchParams.set('profile', entry.username);
   profileLink.href = profileUrl.toString();
   profileLink.textContent = `u/${entry.username}`;
+  if (openProfile) {
+    profileLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      openProfile(entry.username);
+    });
+  }
   player.append(profileLink);
   row.append(position, player);
   for (const value of [entry.rank, entry.xp, entry.victories, entry.participatedEvents, entry.medals]) {
@@ -940,20 +966,31 @@ function createGlobalLeaderboardRow(entry: GlobalLeaderboardEntry) {
   return row;
 }
 
-async function renderGlobalLeaderboard() {
+async function renderGlobalLeaderboard(
+  targetPanel?: HTMLElement,
+  openProfile?: (username: string) => void,
+) {
   const app = document.getElementById('app');
   if (!app) return;
-  stopPhaserGame();
-  clearStateScreen();
-  const screen = document.createElement('section');
-  screen.className = 'game-state-screen';
-  const panel = document.createElement('div');
-  panel.className = 'game-state-screen__panel global-leaderboard';
-  appendText(panel, 'h1', 'game-state-screen__title', 'Global leaderboard');
+  let panel: HTMLElement;
+  if (targetPanel) {
+    panel = targetPanel;
+    panel.replaceChildren();
+    panel.classList.add('global-leaderboard');
+    appendText(panel, 'h2', 'war-desk__form-title', 'Global leaderboard');
+  } else {
+    stopPhaserGame();
+    clearStateScreen();
+    const screen = document.createElement('section');
+    screen.className = 'game-state-screen';
+    panel = document.createElement('div');
+    panel.className = 'game-state-screen__panel global-leaderboard';
+    appendText(panel, 'h1', 'game-state-screen__title', 'Global leaderboard');
+    screen.append(panel);
+    app.append(screen);
+    stateScreenElement = screen;
+  }
   const status = appendText(panel, 'p', 'game-state-screen__meta', 'Loading commanders…');
-  screen.append(panel);
-  app.append(screen);
-  stateScreenElement = screen;
   try {
     const response = await fetch('/api/leaderboard/global');
     const body: GlobalLeaderboardResponse | { message?: string } = await response.json().catch(() => ({}));
@@ -975,7 +1012,7 @@ async function renderGlobalLeaderboard() {
     }
     head.append(header);
     const rows = document.createElement('tbody');
-    rows.append(...body.entries.map(createGlobalLeaderboardRow));
+    rows.append(...body.entries.map((entry) => createGlobalLeaderboardRow(entry, openProfile)));
     table.append(head, rows);
     viewport.append(table);
     panel.append(viewport);
@@ -991,7 +1028,7 @@ async function renderGlobalLeaderboard() {
           .then(async (pageResponse) => {
             const page: GlobalLeaderboardResponse = await pageResponse.json();
             if (!pageResponse.ok || page.type !== 'global-leaderboard') throw new Error();
-            rows.append(...page.entries.map(createGlobalLeaderboardRow));
+            rows.append(...page.entries.map((entry) => createGlobalLeaderboardRow(entry, openProfile)));
             nextCursor = page.nextCursor;
             if (!nextCursor) loadMore.remove();
           })
@@ -1000,31 +1037,44 @@ async function renderGlobalLeaderboard() {
       });
       panel.append(loadMore);
     }
-    const back = createActionButton('Back to battle', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('leaderboard');
-      window.history.replaceState({}, '', url);
-      void loadExpandedState();
-    });
-    panel.append(back);
+    if (!targetPanel) {
+      const back = createActionButton('Back to battle', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('leaderboard');
+        window.history.replaceState({}, '', url);
+        void loadExpandedState();
+      });
+      panel.append(back);
+    }
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : 'Leaderboard unavailable.';
   }
 }
 
-async function renderPlayerProfile(username?: string) {
+async function renderPlayerProfile(
+  username?: string,
+  targetPanel?: HTMLElement,
+  openLeaderboard?: () => void,
+) {
   const app = document.getElementById('app');
   if (!app) return;
-  stopPhaserGame();
-  clearStateScreen();
-  const screen = document.createElement('section');
-  screen.className = 'game-state-screen';
-  const panel = document.createElement('div');
-  panel.className = 'game-state-screen__panel player-profile';
+  let panel: HTMLElement;
+  if (targetPanel) {
+    panel = targetPanel;
+    panel.replaceChildren();
+    panel.classList.add('player-profile');
+  } else {
+    stopPhaserGame();
+    clearStateScreen();
+    const screen = document.createElement('section');
+    screen.className = 'game-state-screen';
+    panel = document.createElement('div');
+    panel.className = 'game-state-screen__panel player-profile';
+    screen.append(panel);
+    app.append(screen);
+    stateScreenElement = screen;
+  }
   const status = appendText(panel, 'p', 'game-state-screen__meta', 'Loading player profile…');
-  screen.append(panel);
-  app.append(screen);
-  stateScreenElement = screen;
 
   try {
     const endpoint = username
@@ -1042,7 +1092,7 @@ async function renderPlayerProfile(username?: string) {
     rankIcon.src = `/assets/ranks/reddit-emoji-upload/hva_rank_${String(body.rankLevel).padStart(2, '0')}.png`;
     rankIcon.alt = `${body.rank} rank insignia`;
     panel.append(rankIcon);
-    appendText(panel, 'h1', 'game-state-screen__title', `u/${body.username}`);
+    appendText(panel, targetPanel ? 'h2' : 'h1', targetPanel ? 'war-desk__form-title' : 'game-state-screen__title', `u/${body.username}`);
     appendText(panel, 'p', 'player-profile__rank-title', `Rank ${body.rankLevel} · ${body.rank}`);
     appendText(panel, 'p', 'game-state-screen__meta', `${body.xp} XP · ${Math.round(body.rankProgress * 100)}% to next rank · ${body.streak} day streak`);
     appendText(panel, 'p', 'game-state-screen__meta', `${body.totalParticipatedEvents} battles · ${body.totalVictories} victories`);
@@ -1090,20 +1140,27 @@ async function renderPlayerProfile(username?: string) {
         share.textContent = shareUrl.toString();
       });
     });
-    const back = createActionButton('Back to battle', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('profile');
-      window.history.replaceState({}, '', url);
-      void loadExpandedState();
-    });
     const leaderboard = createActionButton('Global leaderboard', () => {
+      if (openLeaderboard) {
+        openLeaderboard();
+        return;
+      }
       const url = new URL(window.location.href);
       url.searchParams.delete('profile');
       url.searchParams.set('leaderboard', 'global');
       window.history.replaceState({}, '', url);
       void renderGlobalLeaderboard();
     });
-    actions.append(share, leaderboard, back);
+    actions.append(share, leaderboard);
+    if (!targetPanel) {
+      const back = createActionButton('Back to battle', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('profile');
+        window.history.replaceState({}, '', url);
+        void loadExpandedState();
+      });
+      actions.append(back);
+    }
     panel.append(actions);
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : 'Profile unavailable.';
@@ -1146,19 +1203,26 @@ function appendScoreTable(parent: HTMLElement, result: PublicBattleResultRespons
   parent.append(table);
 }
 
-async function renderPublicBattleResult(battleId: string) {
+async function renderPublicBattleResult(battleId: string, targetPanel?: HTMLElement) {
   const app = document.getElementById('app');
   if (!app) return;
-  stopPhaserGame();
-  clearStateScreen();
-  const screen = document.createElement('section');
-  screen.className = 'game-state-screen';
-  const panel = document.createElement('div');
-  panel.className = 'game-state-screen__panel battle-detail';
+  let panel: HTMLElement;
+  if (targetPanel) {
+    panel = targetPanel;
+    panel.replaceChildren();
+    panel.classList.add('battle-detail');
+  } else {
+    stopPhaserGame();
+    clearStateScreen();
+    const screen = document.createElement('section');
+    screen.className = 'game-state-screen';
+    panel = document.createElement('div');
+    panel.className = 'game-state-screen__panel battle-detail';
+    screen.append(panel);
+    app.append(screen);
+    stateScreenElement = screen;
+  }
   const status = appendText(panel, 'p', 'game-state-screen__meta', 'Loading battle record…');
-  screen.append(panel);
-  app.append(screen);
-  stateScreenElement = screen;
   try {
     const response = await fetch(`/api/battles/${encodeURIComponent(battleId)}/result`);
     const body: PublicBattleResultResponse | { message?: string } = await response.json().catch(() => ({}));
@@ -1166,7 +1230,7 @@ async function renderPublicBattleResult(battleId: string) {
       throw new Error('message' in body && body.message ? body.message : 'Battle record unavailable.');
     }
     panel.replaceChildren();
-    appendText(panel, 'h1', 'game-state-screen__title', `Battle report · ${body.battleDate}`);
+    appendText(panel, targetPanel ? 'h2' : 'h1', targetPanel ? 'war-desk__form-title' : 'game-state-screen__title', `Battle report · ${body.battleDate}`);
     appendText(panel, 'p', 'battle-detail__winner', `Winner: ${body.result.winner.toUpperCase()}`);
     appendText(
       panel,
@@ -1199,13 +1263,16 @@ async function renderPublicBattleResult(battleId: string) {
     post.target = '_blank';
     post.rel = 'noreferrer';
     post.textContent = 'Open Reddit report';
-    const back = createActionButton('Back to battle', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('battle');
-      window.history.replaceState({}, '', url);
-      void loadExpandedState();
-    });
-    actions.append(post, back);
+    actions.append(post);
+    if (!targetPanel) {
+      const back = createActionButton('Back to battle', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('battle');
+        window.history.replaceState({}, '', url);
+        void loadExpandedState();
+      });
+      actions.append(back);
+    }
     panel.append(actions);
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : 'Battle record unavailable.';
@@ -1213,6 +1280,7 @@ async function renderPublicBattleResult(battleId: string) {
 }
 
 async function renderCounterintelligence(panel: HTMLElement) {
+  panel.id = 'war-desk-spy-form';
   const section = document.createElement('section');
   section.className = 'counterintelligence';
   appendText(section, 'h2', 'counterintelligence__title', 'Counterintelligence');
@@ -1267,6 +1335,294 @@ async function renderCounterintelligence(panel: HTMLElement) {
   }
 }
 
+function renderPetitionForm(panel: HTMLElement, initial?: PetitionStatusResponse) {
+  panel.id = 'war-desk-petition-form';
+  appendText(panel, 'h2', 'war-desk__form-title', 'Make the war truly epic');
+  appendText(
+    panel,
+    'p',
+    'war-desk__form-copy',
+    'Support a future Humans vs AI expansion where participating subreddits become armies and fight across a shared campaign. This petition is separate from today\'s battle and grants no XP or combat advantage.',
+  );
+  const count = appendText(panel, 'p', 'war-desk__petition-count', `${initial?.signatureCount ?? 0} registered players signed`);
+  const button = createActionButton(initial?.signed ? 'Petition signed' : 'Sign petition', () => {
+    if (button.disabled) return;
+    button.disabled = true;
+    void fetch('/api/petition/epic-war/sign', { method: 'POST' })
+      .then(async (response) => {
+        const body: PetitionStatusResponse | { message?: string } = await response.json().catch(() => ({}));
+        if (!response.ok || !('type' in body) || body.type !== 'epic-war-petition') {
+          throw new Error('message' in body && body.message ? body.message : 'Could not sign petition.');
+        }
+        button.textContent = 'Petition signed';
+        count.textContent = `${body.signatureCount} registered players signed`;
+      })
+      .catch((error: unknown) => {
+        button.disabled = false;
+        button.textContent = error instanceof Error ? error.message : 'Try again';
+      });
+  });
+  button.disabled = initial?.signed === true;
+  panel.append(button);
+}
+
+function renderDeskCountdown(target: HTMLTimeElement, bootstrap: BootstrapResponse) {
+  if (!bootstrap.battle) {
+    target.textContent = '--:--:--.---';
+    return;
+  }
+  const serverNowMs = new Date(bootstrap.serverNow).getTime();
+  const clientStartedAtMs = Date.now();
+  const resolvesAtMs = new Date(bootstrap.battle.resolvesAt).getTime();
+  const update = () => {
+    const remainingMs = Math.max(0, resolvesAtMs - (serverNowMs + Date.now() - clientStartedAtMs));
+    const hours = Math.floor(remainingMs / 3_600_000);
+    const minutes = Math.floor((remainingMs % 3_600_000) / 60_000);
+    const seconds = Math.floor((remainingMs % 60_000) / 1_000);
+    const milliseconds = remainingMs % 1_000;
+    target.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+  };
+  update();
+  window.setInterval(update, 31);
+}
+
+type DeskLaunch = {
+  task?: 'briefing' | 'profile' | 'leaderboard' | 'report';
+  profileUsername?: string | undefined;
+  battleId?: string | undefined;
+};
+
+function createWarDesk(panel: HTMLElement, bootstrap: BootstrapResponse, launch?: DeskLaunch) {
+  document.body.classList.add('war-desk-active');
+  const assignedArmy = bootstrap.user.participant?.assignedArmy ?? bootstrap.user.army;
+  const deskTheme = assignedArmy === 'green' || assignedArmy === 'blue' ? assignedArmy : 'neutral';
+  const desk = document.createElement('section');
+  desk.className = 'war-desk';
+  desk.dataset.army = deskTheme;
+  desk.style.backgroundImage = `url("/assets/tactical-desk/desk-${deskTheme}.webp")`;
+  desk.setAttribute('aria-label', 'Command desk tasks');
+  const phaserLayer = document.createElement('div');
+  phaserLayer.className = 'war-desk__phaser';
+  const triggers = document.createElement('div');
+  triggers.className = 'war-desk__triggers';
+  triggers.setAttribute('aria-label', 'Interactive desk objects');
+  const sheets = document.createElement('div');
+  sheets.className = 'war-desk__sheets';
+  const taskDefinitions = [
+    { id: 'doctrine', label: 'Open doctrine tablet', object: 'tablet' },
+    { id: 'spy', label: 'Open counterintelligence radio', object: 'radio' },
+    { id: 'petition', label: 'Open petition headset', object: 'headset' },
+    { id: 'briefing', label: 'Open battle briefing', object: 'briefing' },
+    { id: 'map', label: 'Open global map', object: 'map' },
+    { id: 'profile', label: 'Open player profile', object: 'profile' },
+    { id: 'leaderboard', label: 'Open leaderboard', object: 'leaderboard' },
+    { id: 'report', label: 'Open battle report', object: 'report' },
+  ] as const;
+  const sheetById = new Map<string, HTMLElement>();
+  const sheetContentById = new Map<string, HTMLElement>();
+  let activeTask: string | undefined;
+  let prepareTask = (_taskId: string) => {};
+  const closeSheet = () => {
+    activeTask = undefined;
+    desk.dataset.formOpen = 'false';
+    for (const sheet of sheetById.values()) sheet.dataset.active = 'false';
+    triggers.querySelectorAll<HTMLButtonElement>('button').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+  };
+  const activate = (taskId: string) => {
+    if (activeTask === taskId) {
+      closeSheet();
+      return;
+    }
+    activeTask = taskId;
+    desk.dataset.formOpen = 'true';
+    for (const [id, sheet] of sheetById) sheet.dataset.active = String(id === taskId);
+    prepareTask(taskId);
+    triggers.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.task === taskId));
+    });
+    if (taskId === 'map') {
+      const embeddedMap = globalMapElements?.dialog;
+      if (embeddedMap && !embeddedMap.open) embeddedMap.setAttribute('open', '');
+      void loadGlobalMap();
+    }
+  };
+  for (const task of taskDefinitions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `war-desk__trigger war-desk__trigger--${task.object}`;
+    button.setAttribute('aria-label', task.label);
+    const triggerImage = document.createElement('img');
+    triggerImage.src = task.id === 'doctrine'
+      ? '/assets/trigger-doctrine-tablet.webp'
+      : task.id === 'spy'
+        ? '/assets/trigger-spy-scanner.webp'
+        : task.id === 'petition'
+          ? '/assets/trigger-petition-pad.webp'
+          : task.id === 'briefing'
+            ? bootstrap.battle?.activeTerritory
+              ? getBattlefieldLocation(bootstrap.battle.activeTerritory, null).image
+              : '/assets/battlefield.webp'
+            : task.id === 'map'
+              ? `/assets/tactical-desk/trigger-map-${deskTheme}.webp`
+              : task.id === 'profile'
+                ? '/assets/trigger-profile.webp'
+                : task.id === 'report'
+                  ? `/assets/tactical-desk/trigger-report-${deskTheme}.webp`
+                  : '/assets/trigger-leaderboard.webp';
+    triggerImage.alt = '';
+    triggerImage.draggable = false;
+    const triggerLabel = document.createElement('span');
+    triggerLabel.className = 'war-desk__trigger-label';
+    triggerLabel.textContent = {
+      doctrine: 'DOCTRINE', spy: 'SPY CHECK', petition: 'PETITION', briefing: 'BATTLE',
+      map: 'GLOBAL MAP', profile: 'PROFILE', leaderboard: 'RANKING', report: 'BATTLE REPORT',
+    }[task.id];
+    button.append(triggerImage, triggerLabel);
+    button.dataset.task = task.id;
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', () => activate(task.id));
+    triggers.append(button);
+    const sheet = document.createElement('article');
+    sheet.className = 'war-desk__sheet';
+    if (task.id === 'map') sheet.classList.add('war-desk__sheet--landscape');
+    sheet.dataset.task = task.id;
+    sheet.dataset.active = 'false';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'war-desk__close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Return form to desk');
+    close.addEventListener('click', closeSheet);
+    const sheetArt = document.createElement('img');
+    sheetArt.className = 'war-desk__sheet-art';
+    sheetArt.src = task.id === 'map'
+      ? `/assets/tactical-desk/map-tablet-${deskTheme}.webp`
+      : `/assets/tactical-desk/clipboard-${deskTheme}.webp`;
+    sheetArt.alt = '';
+    sheetArt.draggable = false;
+    const content = document.createElement('div');
+    content.className = 'war-desk__sheet-content';
+    sheet.append(sheetArt, close, content);
+    sheetById.set(task.id, sheet);
+    sheetContentById.set(task.id, content);
+    sheets.append(sheet);
+  }
+  desk.dataset.formOpen = 'false';
+  const deskTimer = document.createElement('div');
+  deskTimer.className = 'war-desk__timer';
+  const deskTimerArt = document.createElement('img');
+  deskTimerArt.src = `/assets/tactical-desk/timer-${deskTheme}.webp`;
+  deskTimerArt.alt = '';
+  deskTimerArt.draggable = false;
+  const deskTimerValue = document.createElement('time');
+  deskTimerValue.className = 'war-desk__timer-value';
+  deskTimer.append(deskTimerArt, deskTimerValue);
+  triggers.append(deskTimer);
+  desk.append(phaserLayer, triggers, sheets);
+  panel.append(desk);
+  renderDeskCountdown(deskTimerValue, bootstrap);
+
+  const doctrineSheet = sheetContentById.get('doctrine');
+  const spySheet = sheetContentById.get('spy');
+  const petitionSheet = sheetContentById.get('petition');
+  const briefingSheet = sheetContentById.get('briefing');
+  const mapSheet = sheetContentById.get('map');
+  const profileSheet = sheetContentById.get('profile');
+  const leaderboardSheet = sheetContentById.get('leaderboard');
+  const reportSheet = sheetContentById.get('report');
+  if (doctrineSheet) {
+    const counters = document.createElement('img');
+    counters.className = 'war-desk__doctrine-counters';
+    counters.src = '/assets/doctrine-counters-pixel.webp';
+    counters.alt = 'Doctrine counter matrix: seven doctrines, their wins, losses and draws';
+    doctrineSheet.append(counters);
+    if (bootstrap.user.participating && !bootstrap.user.order) void renderOrderComposer(doctrineSheet);
+    else {
+      appendText(doctrineSheet, 'h2', 'war-desk__form-title', 'Doctrine order');
+      appendText(doctrineSheet, 'p', 'war-desk__form-copy', bootstrap.user.order ? `Locked: ${bootstrap.user.order.doctrineId}` : 'Join today\'s battle to issue an order.');
+    }
+  }
+  if (spySheet) {
+    if (bootstrap.user.participating && !bootstrap.user.spySuspicion) void renderCounterintelligence(spySheet);
+    else {
+      appendText(spySheet, 'h2', 'war-desk__form-title', 'Counterintelligence');
+      appendText(spySheet, 'p', 'war-desk__form-copy', bootstrap.user.spySuspicion ? `Locked: u/${bootstrap.user.spySuspicion.suspectedUsername}` : 'Join today\'s battle to investigate a teammate comment.');
+    }
+  }
+  if (petitionSheet) renderPetitionForm(petitionSheet, bootstrap.user.petition);
+  if (briefingSheet) {
+    renderBattleBriefing(briefingSheet, bootstrap, activate);
+    appendBattleMeta(briefingSheet, bootstrap);
+  }
+  if (mapSheet) {
+    const mapDialog = globalMapElements?.dialog;
+    if (mapDialog) {
+      mapDialog.classList.add('global-map-dialog--embedded');
+      mapDialog.setAttribute('open', '');
+      mapSheet.append(mapDialog);
+    }
+  }
+  if (profileSheet) {
+    appendText(profileSheet, 'p', 'war-desk__form-copy', 'Open the service record to load player rank, medals and battle history.');
+  }
+  if (leaderboardSheet) {
+    appendText(leaderboardSheet, 'p', 'war-desk__form-copy', 'Open career standings to load ranks, experience and medals.');
+  }
+
+  if (reportSheet) {
+    appendText(reportSheet, 'h2', 'war-desk__form-title', 'Battle reports');
+    appendText(reportSheet, 'p', 'war-desk__form-copy', 'Select a completed battle from the Global Map sector log.');
+    if (launch?.battleId) void renderPublicBattleResult(launch.battleId, reportSheet);
+    openDeskBattleReport = (battleId) => {
+      activate('report');
+      void renderPublicBattleResult(battleId, reportSheet);
+    };
+  }
+
+  let loadedProfileUsername: string | undefined;
+  let requestedProfileUsername = launch?.profileUsername ?? bootstrap.user.username;
+  let leaderboardLoaded = false;
+  const loadProfileIntoDesk = (username?: string) => {
+    if (!profileSheet || loadedProfileUsername === username) return;
+    loadedProfileUsername = username;
+    void renderPlayerProfile(username, profileSheet, () => activate('leaderboard'));
+  };
+  prepareTask = (taskId) => {
+    if (taskId === 'profile') loadProfileIntoDesk(requestedProfileUsername);
+    if (taskId === 'leaderboard' && leaderboardSheet && !leaderboardLoaded) {
+      leaderboardLoaded = true;
+      void renderGlobalLeaderboard(leaderboardSheet, (username) => {
+        requestedProfileUsername = username;
+        loadedProfileUsername = username;
+        if (profileSheet) void renderPlayerProfile(username, profileSheet, () => activate('leaderboard'));
+        activate('profile');
+      });
+    }
+  };
+  openDeskPlayerProfile = (username) => {
+    requestedProfileUsername = username;
+    loadedProfileUsername = username;
+    if (profileSheet) void renderPlayerProfile(username, profileSheet, () => activate('leaderboard'));
+    activate('profile');
+  };
+
+  if (launch?.task) activate(launch.task);
+
+  class WarDeskScene extends Phaser.Scene {}
+  warDeskGame = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: phaserLayer,
+    transparent: true,
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      width: Math.max(320, phaserLayer.clientWidth),
+      height: Math.max(540, phaserLayer.clientHeight),
+    },
+    scene: [WarDeskScene],
+    render: { pixelArt: true, antialias: false },
+  });
+}
+
 function appendBattleMeta(panel: HTMLElement, bootstrap: BootstrapResponse) {
   const territory = bootstrap.battle?.activeTerritory;
   if (!territory) return;
@@ -1279,7 +1635,11 @@ function appendBattleMeta(panel: HTMLElement, bootstrap: BootstrapResponse) {
   );
 }
 
-function renderBattleBriefing(panel: HTMLElement, bootstrap: BootstrapResponse) {
+function renderBattleBriefing(
+  panel: HTMLElement,
+  bootstrap: BootstrapResponse,
+  openDeskTask?: (taskId: string) => void,
+) {
   const battle = bootstrap.battle;
   const territory = battle?.activeTerritory;
   if (!battle || !territory) return;
@@ -1307,33 +1667,20 @@ function renderBattleBriefing(panel: HTMLElement, bootstrap: BootstrapResponse) 
     actions.append(warRoom);
   }
   const map = createActionButton('Open global map', () => {
-    document.getElementById('global-map-toggle')?.click();
+    if (openDeskTask) openDeskTask('map');
+    else document.getElementById('global-map-toggle')?.click();
   });
-  const codex = createActionButton('Doctrine Codex', openDoctrineCodex);
+  const codex = createActionButton('Doctrine Codex', () => {
+    if (openDeskTask) openDeskTask('doctrine');
+    else openDoctrineCodex();
+  });
   actions.append(map, codex);
   copy.append(actions);
   briefing.append(image, copy);
   panel.append(briefing);
 }
 
-function renderCountdownTimer(target: HTMLElement, bootstrap: BootstrapResponse) {
-  if (!bootstrap.battle) return;
-
-  const serverNowMs = new Date(bootstrap.serverNow).getTime();
-  const clientStartedAtMs = Date.now();
-  const resolvesAtMs = new Date(bootstrap.battle.resolvesAt).getTime();
-  const updateCountdown = () => {
-    const estimatedServerNowMs = serverNowMs + Date.now() - clientStartedAtMs;
-    const secondsLeft = Math.ceil((resolvesAtMs - estimatedServerNowMs) / 1_000);
-
-    target.textContent = formatDuration(secondsLeft);
-  };
-
-  updateCountdown();
-  window.setInterval(updateCountdown, 1_000);
-}
-
-function renderStateScreen(bootstrap: BootstrapResponse) {
+function renderStateScreen(bootstrap: BootstrapResponse, launch?: DeskLaunch) {
   const app = document.getElementById('app');
   if (!app) {
     startPhaserGame();
@@ -1349,23 +1696,6 @@ function renderStateScreen(bootstrap: BootstrapResponse) {
   const panel = document.createElement('div');
   panel.className = 'game-state-screen__panel';
   screen.append(panel);
-
-  if (bootstrap.user.exists) {
-    const profileButton = createActionButton(
-      'My profile',
-      () => void renderPlayerProfile(bootstrap.user.username),
-    );
-    profileButton.classList.add('game-state-screen__profile-button');
-    panel.append(profileButton);
-    const leaderboardButton = createActionButton('Leaderboard', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('leaderboard', 'global');
-      window.history.replaceState({}, '', url);
-      void renderGlobalLeaderboard();
-    });
-    leaderboardButton.classList.add('game-state-screen__profile-button');
-    panel.append(leaderboardButton);
-  }
 
   if (bootstrap.view === 'summary') {
     appendText(panel, 'h1', 'game-state-screen__title', 'Battle report');
@@ -1454,61 +1784,21 @@ function renderStateScreen(bootstrap: BootstrapResponse) {
       link.rel = 'noreferrer';
       link.textContent = 'Open post';
       panel.append(link);
-      void renderDailyLeaderboard(panel, bootstrap.battle.id);
     }
+    const reportNodes = Array.from(panel.childNodes);
+    screen.classList.add('game-state-screen--desk');
+    panel.classList.add('game-state-screen__panel--desk');
+    createWarDesk(panel, bootstrap, launch);
+    const reportContent = panel.querySelector<HTMLElement>('.war-desk__sheet[data-task="report"] .war-desk__sheet-content');
+    if (reportContent && !launch?.battleId) {
+      reportContent.replaceChildren(...reportNodes);
+      if (bootstrap.battle) void renderDailyLeaderboard(reportContent, bootstrap.battle.id);
+    }
+    if (!launch?.task) panel.querySelector<HTMLButtonElement>('.war-desk__trigger[data-task="report"]')?.click();
   } else if (bootstrap.view === 'countdown') {
-    panel.classList.add('game-state-screen__panel--command');
-    appendText(panel, 'h1', 'game-state-screen__title', 'Daily battle is live');
-    const timer = appendText(panel, 'p', 'game-state-screen__timer', '');
-    renderBattleBriefing(panel, bootstrap);
-    appendBattleMeta(panel, bootstrap);
-    if (bootstrap.user.participant) {
-      const participant = bootstrap.user.participant;
-      appendText(
-        panel,
-        'p',
-        'game-state-screen__meta',
-        `Assigned army: ${participant.assignedArmy.toUpperCase()} / power ${participant.powerSnapshot.total} / ${participant.powerSnapshot.rank}`,
-      );
-    }
-    if (bootstrap.user.spyAssignment) {
-      appendText(
-        panel,
-        'p',
-        'game-state-screen__meta',
-        `Spy assignment: your public flair is ${bootstrap.user.spyAssignment.coverArmy.toUpperCase()}, but your order counts for your assigned army. Objective: ${bootstrap.user.spyAssignment.objective}`,
-      );
-    }
-    if (bootstrap.battle) {
-      const balance = bootstrap.battle.armyBalance;
-      appendText(
-        panel,
-        'p',
-        'game-state-screen__meta',
-        `Army power: Green ${balance.green.totalPower} (${balance.green.participantCount}) / Blue ${balance.blue.totalPower} (${balance.blue.participantCount})`,
-      );
-    }
-    if (bootstrap.user.order) {
-      appendText(
-        panel,
-        'p',
-        'game-state-screen__body',
-        `Order locked: ${bootstrap.user.order.army.toUpperCase()} / ${bootstrap.user.order.doctrineId}. AI result posts at 21:00 ET.`,
-      );
-    } else {
-      void renderOrderComposer(panel);
-    }
-    if (bootstrap.user.spySuspicion) {
-      appendText(
-        panel,
-        'p',
-        'game-state-screen__meta',
-        `Counterintelligence locked: u/${bootstrap.user.spySuspicion.suspectedUsername}`,
-      );
-    } else if (bootstrap.user.participating) {
-      void renderCounterintelligence(panel);
-    }
-    renderCountdownTimer(timer, bootstrap);
+    screen.classList.add('game-state-screen--desk');
+    panel.classList.add('game-state-screen__panel--desk');
+    createWarDesk(panel, bootstrap, launch);
   } else {
     appendText(panel, 'h1', 'game-state-screen__title', 'Join humanity');
     appendText(
@@ -1518,16 +1808,22 @@ function renderStateScreen(bootstrap: BootstrapResponse) {
       'Join today\'s event. The system immediately assigns you to the weaker army and applies your temporary team flair.',
     );
     const button = createActionButton('Join today\'s event', () => {
-      void joinDailyEvent(panel, button);
+      void joinDailyEvent(button.parentElement ?? panel, button);
     });
     panel.append(button);
+    const joinNodes = Array.from(panel.childNodes);
+    screen.classList.add('game-state-screen--desk');
+    panel.classList.add('game-state-screen__panel--desk');
+    createWarDesk(panel, bootstrap, launch ?? { task: 'briefing' });
+    const briefingContent = panel.querySelector<HTMLElement>('.war-desk__sheet[data-task="briefing"] .war-desk__sheet-content');
+    briefingContent?.prepend(...joinNodes);
   }
 
   app.append(screen);
   stateScreenElement = screen;
 }
 
-async function loadExpandedState() {
+async function loadExpandedState(launch?: DeskLaunch) {
   try {
     const response = await fetch('/api/bootstrap');
     if (!response.ok) {
@@ -1536,7 +1832,7 @@ async function loadExpandedState() {
     }
 
     const bootstrap: BootstrapResponse = await response.json();
-    renderStateScreen(bootstrap);
+    renderStateScreen(bootstrap, launch);
   } catch {
     startPhaserGame();
   }
@@ -1555,9 +1851,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sharedProfile = new URL(window.location.href).searchParams.get('profile');
   const sharedBattle = new URL(window.location.href).searchParams.get('battle');
   const sharedLeaderboard = new URL(window.location.href).searchParams.get('leaderboard');
-  if (sharedProfile) await renderPlayerProfile(sharedProfile);
-  else if (sharedBattle) await renderPublicBattleResult(sharedBattle);
-  else if (sharedLeaderboard === 'global') await renderGlobalLeaderboard();
+  if (sharedProfile) await loadExpandedState({ task: 'profile', profileUsername: sharedProfile });
+  else if (sharedBattle) await loadExpandedState({ task: 'report', battleId: sharedBattle });
+  else if (sharedLeaderboard === 'global') await loadExpandedState({ task: 'leaderboard' });
   else await loadExpandedState();
 });
 
