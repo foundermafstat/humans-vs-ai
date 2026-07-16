@@ -23,6 +23,7 @@ const startButton = document.getElementById('start-button') as HTMLButtonElement
 const testMessageButton = document.getElementById('test-message-button') as HTMLButtonElement;
 const commentsGreenButton = document.getElementById('comments-green-button') as HTMLButtonElement;
 const commentsBlueButton = document.getElementById('comments-blue-button') as HTMLButtonElement;
+const dayLeaderboardButton = document.getElementById('day-leaderboard-button') as HTMLButtonElement;
 const titleElement = document.getElementById('title') as HTMLHeadingElement;
 const stateDetailElement = document.getElementById('state-detail') as HTMLParagraphElement;
 const gameLogoElement = document.getElementById('game-logo') as HTMLImageElement;
@@ -105,6 +106,7 @@ const BATTLEFIELD_KEY = 'splash-battlefield';
 const FX_ASSET_VERSION = '2026-06-29-fire-hotbase';
 const FIELD_PARENT_ID = 'battlefield-scene';
 const GAME_LOGO = '/assets/logo1.webp';
+const SPLASH_LAUNCH_TARGET_KEY = 'humans-vs-ai:splash-launch-target';
 const devToolsEnabled = new URLSearchParams(window.location.search).get('dev') === '1';
 let countdownInterval: number | undefined;
 let activeBattlefieldLocation: BattlefieldLocation = getBattlefieldLocation(undefined, null);
@@ -126,11 +128,22 @@ function clearCountdown() {
   countdownInterval = undefined;
 }
 
+function setSplashLaunchTarget(target?: 'daily-leaderboard') {
+  try {
+    if (target) sessionStorage.setItem(SPLASH_LAUNCH_TARGET_KEY, target);
+    else sessionStorage.removeItem(SPLASH_LAUNCH_TARGET_KEY);
+  } catch {
+    // Continue into expanded mode when storage is unavailable.
+  }
+}
+
 function renderPromo() {
   clearCountdown();
   document.body.dataset.splashView = 'promo';
   awardsElement.hidden = false;
+  dayLeaderboardButton.hidden = true;
   titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
+  stateDetailElement.hidden = false;
   stateDetailElement.textContent = 'A new 7-doctrine war starts inside this post.';
   startButton.textContent = 'Start';
 }
@@ -153,7 +166,9 @@ function renderCountdown(bootstrap: BootstrapResponse) {
 
   document.body.dataset.splashView = 'countdown';
   awardsElement.hidden = true;
+  dayLeaderboardButton.hidden = true;
   updateCountdown();
+  stateDetailElement.hidden = false;
   countdownInterval = window.setInterval(updateCountdown, 31);
   stateDetailElement.textContent = bootstrap.battle.activeTerritory
     ? `${bootstrap.battle.activeTerritory.name} is active. Owner: ${bootstrap.battle.activeTerritory.owner}.`
@@ -161,16 +176,15 @@ function renderCountdown(bootstrap: BootstrapResponse) {
   startButton.textContent = bootstrap.user.participating ? 'Open' : 'Open to join';
 }
 
-function renderSummary(bootstrap: BootstrapResponse) {
+function renderSummary() {
   clearCountdown();
   document.body.dataset.splashView = 'summary';
   awardsElement.hidden = true;
+  dayLeaderboardButton.hidden = false;
   titleElement.textContent = 'Battle report is ready';
-  stateDetailElement.textContent =
-    bootstrap.battle?.result?.reportText ??
-    bootstrap.battle?.resultSummary ??
-    'The AI has posted the result of the daily battle.';
-  startButton.textContent = 'View';
+  stateDetailElement.textContent = '';
+  stateDetailElement.hidden = true;
+  startButton.textContent = 'View report';
 }
 
 function renderTicker(bootstrap: BootstrapResponse, map: GlobalMapResponse | undefined) {
@@ -202,12 +216,13 @@ function renderSummaryMap(map: GlobalMapResponse, battleId: string | undefined) 
   for (const territory of map.territories) {
     const postPermalink = latestPost(territory);
     const cell = document.createElement(postPermalink ? 'a' : 'span');
-    cell.className = `summary-map__cell summary-map__cell--${territory.owner}`;
+    cell.className = 'summary-map__cell';
     cell.style.gridColumn = String(territory.column);
     cell.style.gridRow = String(territory.row);
     cell.title = `${territory.name} — ${territory.owner}`;
     const changedThisCycle = territory.history.some((capture) => capture.battleId === battleId);
     cell.classList.toggle('summary-map__cell--latest', changedThisCycle);
+    if (changedThisCycle) cell.classList.add(`summary-map__cell--${territory.owner}`);
     if (cell instanceof HTMLAnchorElement && postPermalink) {
       cell.href = postPermalink;
       cell.target = '_blank';
@@ -232,7 +247,7 @@ async function loadBattleState(): Promise<{ bootstrap?: BootstrapResponse; map?:
     renderTicker(bootstrap, map);
 
     if (bootstrap.view === 'summary') {
-      renderSummary(bootstrap);
+      renderSummary();
       if (map) renderSummaryMap(map, bootstrap.battle?.id);
       return map ? { bootstrap, map } : { bootstrap };
     }
@@ -1267,6 +1282,12 @@ async function initializeSplash() {
 }
 
 startButton.addEventListener('click', (event) => {
+  setSplashLaunchTarget();
+  requestExpandedMode(event, 'game');
+});
+
+dayLeaderboardButton.addEventListener('click', (event) => {
+  setSplashLaunchTarget('daily-leaderboard');
   requestExpandedMode(event, 'game');
 });
 

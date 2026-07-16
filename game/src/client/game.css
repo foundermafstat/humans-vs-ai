@@ -600,6 +600,25 @@ body.war-desk-active .global-map-toggle {
   color: #2d1c11;
 }
 
+.war-desk__sheet .daily-leaderboard--daily-event .daily-leaderboard__table {
+  min-width: 0;
+  table-layout: fixed;
+  font-size: clamp(0.95rem, 2.4vw, 1.2rem);
+}
+
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(3),
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(4),
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(6) {
+  display: none;
+}
+
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(1) { width: 20%; }
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(2) { width: 52%; }
+.war-desk__sheet .daily-leaderboard--daily-event :is(th, td):nth-child(5) {
+  width: 28%;
+  font-weight: 700;
+}
+
 .war-desk__sheet .daily-leaderboard__table th,
 .war-desk__sheet .battle-detail__scores th {
   background: #3a2414;
@@ -1649,7 +1668,7 @@ body.war-desk-active .global-map-toggle {
 }
 
 .global-map-cell--contested {
-  --territory-control-texture: url('/assets/maps/territory-overlays/territory-stripes-gray.png');
+  --territory-control-texture: none;
 }
 
 .global-map-cell__control-texture {

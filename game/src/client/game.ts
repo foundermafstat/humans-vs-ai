@@ -71,6 +71,8 @@ const TERRITORY_OWNER_MARKERS: Record<TerritoryOwner, string> = {
   contested: '?',
 };
 
+const SPLASH_LAUNCH_TARGET_KEY = 'humans-vs-ai:splash-launch-target';
+
 const DOCTRINE_CARD_TEXT: Record<DoctrineId, string> = {
   STRIKE: 'Assault. Breaks Hack, Virus, Phantom.',
   HACK: 'Exploit. Breaks Virus, Phantom, Shield.',
@@ -852,7 +854,7 @@ function createMedalCard(medalTitle: string) {
 
 async function renderDailyLeaderboard(panel: HTMLElement, battleId: string) {
   const section = document.createElement('section');
-  section.className = 'daily-leaderboard';
+  section.className = 'daily-leaderboard daily-leaderboard--daily-event';
   const title = appendText(section, 'h2', 'daily-leaderboard__title', 'Daily leaderboard');
   const status = appendText(section, 'p', 'game-state-screen__meta', 'Loading participants…');
   panel.append(section);
@@ -864,7 +866,8 @@ async function renderDailyLeaderboard(panel: HTMLElement, battleId: string) {
       throw new Error('message' in body && body.message ? body.message : 'Leaderboard unavailable.');
     }
     status.remove();
-    title.textContent = `Daily leaderboard · ${body.entries.length}${body.nextCursor ? '+' : ''} players`;
+    const playerLabel = body.entries.length === 1 && !body.nextCursor ? 'player' : 'players';
+    title.textContent = `Daily leaderboard · ${body.entries.length}${body.nextCursor ? '+' : ''} ${playerLabel}`;
 
     const viewport = document.createElement('div');
     viewport.className = 'daily-leaderboard__viewport';
@@ -1374,6 +1377,7 @@ type DeskLaunch = {
   task?: DeskTaskId;
   profileUsername?: string | undefined;
   battleId?: string | undefined;
+  leaderboardMode?: 'daily' | undefined;
 };
 
 function createWarDesk(panel: HTMLElement, bootstrap: BootstrapResponse, launch?: DeskLaunch) {
@@ -1604,12 +1608,17 @@ function createWarDesk(panel: HTMLElement, bootstrap: BootstrapResponse, launch?
     if (taskId === 'profile') loadProfileIntoDesk(requestedProfileUsername);
     if (taskId === 'leaderboard' && leaderboardSheet && !leaderboardLoaded) {
       leaderboardLoaded = true;
-      void renderGlobalLeaderboard(leaderboardSheet, (username) => {
-        requestedProfileUsername = username;
-        loadedProfileUsername = username;
-        if (profileSheet) void renderPlayerProfile(username, profileSheet, () => activate('leaderboard'));
-        activate('profile');
-      });
+      if (launch?.leaderboardMode === 'daily' && bootstrap.view === 'summary' && bootstrap.battle) {
+        leaderboardSheet.replaceChildren();
+        void renderDailyLeaderboard(leaderboardSheet, bootstrap.battle.id);
+      } else {
+        void renderGlobalLeaderboard(leaderboardSheet, (username) => {
+          requestedProfileUsername = username;
+          loadedProfileUsername = username;
+          if (profileSheet) void renderPlayerProfile(username, profileSheet, () => activate('leaderboard'));
+          activate('profile');
+        });
+      }
     }
   };
   openDeskPlayerProfile = (username) => {
@@ -1893,6 +1902,16 @@ function getLaunchParams() {
   return params;
 }
 
+function consumeSplashLaunchTarget() {
+  try {
+    const target = sessionStorage.getItem(SPLASH_LAUNCH_TARGET_KEY);
+    sessionStorage.removeItem(SPLASH_LAUNCH_TARGET_KEY);
+    return target;
+  } catch {
+    return null;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   setupGlobalMap();
 
@@ -1907,10 +1926,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sharedProfile = launchParams.get('profile');
   const sharedBattle = launchParams.get('battle');
   const sharedLeaderboard = launchParams.get('leaderboard');
+  const splashLaunchTarget = consumeSplashLaunchTarget();
   if (sharedProfile) await loadExpandedState({ task: 'profile', profileUsername: sharedProfile });
   else if (sharedBattle) await loadExpandedState({ task: 'report', battleId: sharedBattle });
   else if (sharedLeaderboard === 'global') await loadExpandedState({ task: 'leaderboard' });
-  else await loadExpandedState();
+  else if (splashLaunchTarget === 'daily-leaderboard') {
+    await loadExpandedState({ task: 'leaderboard', leaderboardMode: 'daily' });
+  } else await loadExpandedState();
 });
 
 window.addEventListener('humans-vs-ai:player-joined', () => {
