@@ -2573,7 +2573,11 @@ export function isNewYorkWallTime(now: Date, hour: number, minute: number) {
 export async function getBootstrapResponse(): Promise<BootstrapResponse> {
   const now = new Date();
   const userId = context.userId;
-  let player = await getPlayer(userId);
+  const [storedPlayer, registeredPlayerCount] = await Promise.all([
+    getPlayer(userId),
+    redis.hLen(PLAYERS_KEY),
+  ]);
+  let player = storedPlayer;
   if (player && !player.redditUsername) {
     const redditUsername = await reddit.getCurrentUsername().catch(() => undefined);
     if (redditUsername) {
@@ -2595,6 +2599,7 @@ export async function getBootstrapResponse(): Promise<BootstrapResponse> {
     type: 'bootstrap',
     serverNow: now.toISOString(),
     view: 'promo',
+    registeredPlayerCount,
     user: createPlayerBattleState({ player, participant, order, spyOffer, dailyReward, spySuspicion, petition }),
   };
 
@@ -2617,7 +2622,7 @@ export async function getBootstrapResponse(): Promise<BootstrapResponse> {
     return response;
   }
 
-  response.view = participant ? 'countdown' : 'promo';
+  response.view = player ? 'countdown' : 'promo';
   return response;
 }
 

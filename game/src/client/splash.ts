@@ -6,7 +6,8 @@ import type {
   BootstrapResponse,
   DivisionCommentAnalysisResponse,
   DivisionTarget,
-  TerritoryView,
+  GlobalMapResponse,
+  GlobalMapTerritoryView,
 } from '../shared/api';
 import { getBattlefieldLocation, type BattlefieldLocation } from './battlefieldLocations';
 import {
@@ -25,6 +26,10 @@ const commentsBlueButton = document.getElementById('comments-blue-button') as HT
 const titleElement = document.getElementById('title') as HTMLHeadingElement;
 const stateDetailElement = document.getElementById('state-detail') as HTMLParagraphElement;
 const gameLogoElement = document.getElementById('game-logo') as HTMLImageElement;
+const awardsElement = document.querySelector('.splash-awards') as HTMLImageElement;
+const tickerTrackElement = document.querySelector('.stats-ticker__track') as HTMLDivElement;
+const summaryMapElement = document.getElementById('summary-map') as HTMLElement;
+const summaryMapGridElement = document.getElementById('summary-map-grid') as HTMLDivElement;
 
 const ARMY_VARIANTS = [
   'man_african',
@@ -99,22 +104,19 @@ type BattleSoldier = {
 const BATTLEFIELD_KEY = 'splash-battlefield';
 const FX_ASSET_VERSION = '2026-06-29-fire-hotbase';
 const FIELD_PARENT_ID = 'battlefield-scene';
-const GAME_LOGOS = [
-  '/assets/logo1.webp',
-  '/assets/logo2.webp',
-  '/assets/logo3.webp',
-] as const;
+const GAME_LOGO = '/assets/logo1.webp';
 const devToolsEnabled = new URLSearchParams(window.location.search).get('dev') === '1';
 let countdownInterval: number | undefined;
 let activeBattlefieldLocation: BattlefieldLocation = getBattlefieldLocation(undefined, null);
 
-function formatDuration(totalSeconds: number) {
-  const seconds = Math.max(0, totalSeconds);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = seconds % 60;
+function formatDuration(totalMilliseconds: number) {
+  const milliseconds = Math.max(0, Math.floor(totalMilliseconds));
+  const hours = Math.floor(milliseconds / 3_600_000);
+  const minutes = Math.floor((milliseconds % 3_600_000) / 60_000);
+  const seconds = Math.floor((milliseconds % 60_000) / 1_000);
+  const remainder = milliseconds % 1_000;
 
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(remainder).padStart(3, '0')}`;
 }
 
 function clearCountdown() {
@@ -126,6 +128,8 @@ function clearCountdown() {
 
 function renderPromo() {
   clearCountdown();
+  document.body.dataset.splashView = 'promo';
+  awardsElement.hidden = false;
   titleElement.textContent = `Join the ranks of humanity, ${context?.username ?? 'fighter'}`;
   stateDetailElement.textContent = 'A new 7-doctrine war starts inside this post.';
   startButton.textContent = 'Start';
@@ -144,21 +148,23 @@ function renderCountdown(bootstrap: BootstrapResponse) {
   const resolvesAtMs = new Date(bootstrap.battle.resolvesAt).getTime();
   const updateCountdown = () => {
     const estimatedServerNowMs = serverNowMs + Date.now() - clientStartedAtMs;
-    const secondsLeft = Math.ceil((resolvesAtMs - estimatedServerNowMs) / 1_000);
-
-    titleElement.textContent = `Daily battle ends in ${formatDuration(secondsLeft)}`;
+    titleElement.textContent = `Daily battle ends in ${formatDuration(resolvesAtMs - estimatedServerNowMs)}`;
   };
 
+  document.body.dataset.splashView = 'countdown';
+  awardsElement.hidden = true;
   updateCountdown();
-  countdownInterval = window.setInterval(updateCountdown, 1_000);
+  countdownInterval = window.setInterval(updateCountdown, 31);
   stateDetailElement.textContent = bootstrap.battle.activeTerritory
     ? `${bootstrap.battle.activeTerritory.name} is active. Owner: ${bootstrap.battle.activeTerritory.owner}.`
     : 'AI result posts at 21:00 ET.';
-  startButton.textContent = 'Open';
+  startButton.textContent = bootstrap.user.participating ? 'Open' : 'Open to join';
 }
 
 function renderSummary(bootstrap: BootstrapResponse) {
   clearCountdown();
+  document.body.dataset.splashView = 'summary';
+  awardsElement.hidden = true;
   titleElement.textContent = 'Battle report is ready';
   stateDetailElement.textContent =
     bootstrap.battle?.result?.reportText ??
@@ -167,31 +173,80 @@ function renderSummary(bootstrap: BootstrapResponse) {
   startButton.textContent = 'View';
 }
 
-async function loadBattleState(): Promise<TerritoryView | undefined> {
+function renderTicker(bootstrap: BootstrapResponse, map: GlobalMapResponse | undefined) {
+  const territories = map?.territories ?? [];
+  const total = territories.length;
+  const counts = { green: 0, blue: 0, ai: 0, contested: 0 };
+  for (const territory of territories) counts[territory.owner] += 1;
+  const percent = (count: number) => total === 0 ? '0.0' : ((count / total) * 100).toFixed(1);
+  const message = [
+    `REGISTERED PLAYERS: ${bootstrap.registeredPlayerCount}`,
+    `MAP CONTROLLED: ${total - counts.contested}/${total}`,
+    `GREEN: ${counts.green} (${percent(counts.green)}%)`,
+    `BLUE: ${counts.blue} (${percent(counts.blue)}%)`,
+    `AI: ${counts.ai} (${percent(counts.ai)}%)`,
+    `CONTESTED: ${counts.contested} (${percent(counts.contested)}%)`,
+  ].join('  |  ');
+  tickerTrackElement.textContent = `${message}  |  ${message}  |  `;
+}
+
+function latestPost(territory: GlobalMapTerritoryView) {
+  return territory.history.find((capture) => capture.postPermalink)?.postPermalink;
+}
+
+function renderSummaryMap(map: GlobalMapResponse, battleId: string | undefined) {
+  summaryMapGridElement.replaceChildren();
+  summaryMapGridElement.style.setProperty('--summary-columns', String(map.columns));
+  summaryMapGridElement.style.setProperty('--summary-rows', String(map.rows));
+
+  for (const territory of map.territories) {
+    const postPermalink = latestPost(territory);
+    const cell = document.createElement(postPermalink ? 'a' : 'span');
+    cell.className = `summary-map__cell summary-map__cell--${territory.owner}`;
+    cell.style.gridColumn = String(territory.column);
+    cell.style.gridRow = String(territory.row);
+    cell.title = `${territory.name} — ${territory.owner}`;
+    const changedThisCycle = territory.history.some((capture) => capture.battleId === battleId);
+    cell.classList.toggle('summary-map__cell--latest', changedThisCycle);
+    if (cell instanceof HTMLAnchorElement && postPermalink) {
+      cell.href = postPermalink;
+      cell.target = '_blank';
+      cell.rel = 'noreferrer';
+      cell.setAttribute('aria-label', `Open the latest battle post for ${territory.name}`);
+    }
+    summaryMapGridElement.append(cell);
+  }
+  summaryMapElement.hidden = false;
+}
+
+async function loadBattleState(): Promise<{ bootstrap?: BootstrapResponse; map?: GlobalMapResponse }> {
   try {
-    const response = await fetch('/api/bootstrap');
+    const [response, mapResponse] = await Promise.all([fetch('/api/bootstrap'), fetch('/api/global-map')]);
     if (!response.ok) {
       renderPromo();
-      return undefined;
+      return {};
     }
 
     const bootstrap: BootstrapResponse = await response.json();
+    const map: GlobalMapResponse | undefined = mapResponse.ok ? await mapResponse.json() : undefined;
+    renderTicker(bootstrap, map);
 
     if (bootstrap.view === 'summary') {
       renderSummary(bootstrap);
-      return bootstrap.battle?.activeTerritory;
+      if (map) renderSummaryMap(map, bootstrap.battle?.id);
+      return map ? { bootstrap, map } : { bootstrap };
     }
 
     if (bootstrap.view === 'countdown') {
       renderCountdown(bootstrap);
-      return bootstrap.battle?.activeTerritory;
+      return map ? { bootstrap, map } : { bootstrap };
     }
 
     renderPromo();
-    return bootstrap.battle?.activeTerritory;
+    return map ? { bootstrap, map } : { bootstrap };
   } catch {
     renderPromo();
-    return undefined;
+    return {};
   }
 }
 
@@ -353,7 +408,7 @@ function pick<T>(items: readonly T[]) {
 }
 
 function setupGameLogo() {
-  gameLogoElement.src = pick(GAME_LOGOS);
+  gameLogoElement.src = GAME_LOGO;
 }
 
 class SplashBattleScene extends Scene {
@@ -1205,9 +1260,9 @@ function startBattlefield() {
 }
 
 async function initializeSplash() {
-  const territory = await loadBattleState();
-  const requestedLocation = new URLSearchParams(window.location.search).get('location');
-  activeBattlefieldLocation = getBattlefieldLocation(territory, requestedLocation);
+  const { bootstrap } = await loadBattleState();
+  if (bootstrap?.view === 'summary') return;
+  activeBattlefieldLocation = getBattlefieldLocation(bootstrap?.battle?.activeTerritory, null);
   startBattlefield();
 }
 

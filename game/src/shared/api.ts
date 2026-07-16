@@ -377,6 +377,7 @@ export type BootstrapResponse = {
   type: "bootstrap";
   serverNow: string;
   view: BattleView;
+  registeredPlayerCount: number;
   user: PlayerBattleState;
   battle?: BootstrapBattle;
 };

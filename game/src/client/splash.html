@@ -14,6 +14,10 @@
   </head>
   <body class="app">
     <div class="battlefield-scene" id="battlefield-scene"></div>
+    <section class="summary-map" id="summary-map" aria-label="Campaign territory map" hidden>
+      <img src="/assets/maps/world.webp" alt="Global campaign map" />
+      <div class="summary-map__grid" id="summary-map-grid"></div>
+    </section>
     <img class="splash-awards" src="/assets/awards.webp" alt="" aria-hidden="true" draggable="false" />
     <section class="game-title" aria-label="Game title">
       <img class="game-title__logo" id="game-logo" alt="The first truly epic war of humanity against AI" draggable="false" />
@@ -30,8 +34,7 @@
     </main>
     <div class="stats-ticker" aria-label="Game statistics">
       <div class="stats-ticker__track">
-        HUMANITY ONLINE: 6,156 | AI WAVES REPELLED: 42 | SHIELD WALLS RAISED: 18 | SPIES DETECTED: 7 | WAR POSTS SENT:
-        128 | CURRENT CLOCK: 6156 |
+        LOADING LIVE CAMPAIGN DATA...
       </div>
     </div>
     <script type="module" src="splash.ts" defer></script>

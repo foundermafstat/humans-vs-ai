@@ -51,15 +51,90 @@ body,
   transform-origin: top center;
 }
 
+.splash-awards[hidden] {
+  display: none;
+}
+
 .game-title {
   position: fixed;
   top: 50%;
   left: 50%;
   z-index: 3;
-  width: min(70vw, 900px);
-  transform: translate(-50%, -50%);
+  width: min(61vw, 780px);
+  transform: translate(-50%, -58%);
   pointer-events: none;
   text-align: center;
+}
+
+.summary-map {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: #111711;
+}
+
+.summary-map[hidden] {
+  display: none;
+}
+
+.summary-map > img,
+.summary-map__grid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, calc(100vh * 6 / 5));
+  height: min(100vh, calc(100vw * 5 / 6));
+  transform: translate(-50%, -50%);
+}
+
+.summary-map > img {
+  object-fit: fill;
+}
+
+.summary-map__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--summary-columns, 6), 1fr);
+  grid-template-rows: repeat(var(--summary-rows, 5), 1fr);
+}
+
+.summary-map__cell {
+  --summary-texture: url('/assets/maps/territory-overlays/territory-stripes-gray.png');
+  border: 1px solid rgba(255, 248, 219, 0.25);
+  background: var(--summary-texture) center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+
+.summary-map__cell--green { --summary-texture: url('/assets/maps/territory-overlays/territory-stripes-green.png'); }
+.summary-map__cell--blue { --summary-texture: url('/assets/maps/territory-overlays/territory-stripes-blue.png'); }
+.summary-map__cell--ai { --summary-texture: url('/assets/maps/territory-overlays/territory-stripes-red.png'); }
+.summary-map__cell--contested { background: transparent; }
+
+a.summary-map__cell {
+  cursor: pointer;
+}
+
+a.summary-map__cell:hover,
+a.summary-map__cell:focus-visible {
+  outline: 3px solid #f2c35b;
+  outline-offset: -3px;
+}
+
+.summary-map__cell--latest {
+  animation: latest-territory-flash 900ms steps(2, end) infinite;
+}
+
+@keyframes latest-territory-flash {
+  50% { opacity: 0.22; }
+}
+
+body[data-splash-view="summary"] .game-title {
+  top: 15%;
+  width: min(38vw, 480px);
+}
+
+body[data-splash-view="summary"] .content {
+  bottom: 42px;
 }
 
 .game-title__logo {
